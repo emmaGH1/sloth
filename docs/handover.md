@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 4 — Sites migration built successfully.** Sloth is now packaged in the supported vinext/Cloudflare Sites runtime while preserving the locked payment-operations demo.
+**Checkpoint 5 — deployed privately to ChatGPT Sites.** Sloth is live at `https://sloth-webmcp.theboyemma.chatgpt.site` on Sites version 1.
 
 ## Locked decisions
 
@@ -23,14 +23,15 @@
 - Published commits on `main`: `a5746a5` (controls and handover) and `2628dcc` (full demo implementation).
 - Migrated the static prototype into a single-route React client app using the Sites starter runtime and `.openai/hosting.json`.
 - `npm test` passes all 3 scope-enforcement tests and `npm run build` produces the required `dist/server/index.js` bundle.
+- Added and verified a bespoke Sloth social-preview card with exact brand copy and host-derived Open Graph/X metadata.
+- Production deployment succeeded on ChatGPT Sites and was opened in the Codex browser panel.
 
 ## Risks / open items
 
 - Native browser testing remains required: WebMCP is a preview API and may require an enabled flag, origin trial, or browser extension. The app degrades visibly and safely if unavailable.
 - Automated browser control could not load the local server because its localhost client is blocked in this environment. The local server itself returned HTTP 200; repeat browser verification directly in the user’s Chrome/ChatGPT environment.
-- The GitHub remote reported `origin/main [gone]` on clone because the remote was empty; pushing will require network access and repository permissions.
-- Sites project creation and hosted native WebMCP verification are still pending.
+- Native WebMCP verification on the deployed URL is still pending. The hosted page will show `WebMCP ready` when `document.modelContext` is available and `Visual fallback active` otherwise.
 
 ## NEXT ACTION
 
-Generate and verify the Sloth social preview, create the Sites project, publish the validated build privately, then run the README judge path on the deployed HTTPS URL in WebMCP-enabled Chrome and ChatGPT Site Tools.
+Run the README judge path at `https://sloth-webmcp.theboyemma.chatgpt.site` in WebMCP-enabled Chrome and ChatGPT Site Tools. Record the tool inventory before approval, after approval, and after revocation; fix only native-path blockers.
