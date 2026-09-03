@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { confirmedTransactions as transactions, validateRefund } from "../scope.js";
+import { confirmedTransactions as transactions, planRefunds, validateRefund } from "../scope.js";
 
 type Phase = "idle" | "investigating" | "request" | "granted" | "completed" | "closed" | "denied";
 type ToolDefinition = {
@@ -110,13 +110,16 @@ export default function Home() {
               transactions: {
                 type: "array",
                 description: "Refund instructions constrained by the active human grant.",
-                items: { type: "object", properties: { id: { type: "string" }, amount: { type: "number" } }, required: ["id", "amount"] }
+                minItems: 1,
+                items: { type: "object", properties: { id: { type: "string" }, amount: { type: "number", exclusiveMinimum: 0 } }, required: ["id", "amount"] }
               }
             },
             required: ["transactions"]
           },
           async execute(input) {
             const response = validateRefund(input, maxAmount);
+            setToolResult(response);
+            if (response.ok) setPhase("completed");
             addLog(response.ok ? "Native WebMCP tool completed an in-scope refund call." : "Native WebMCP blocked an out-of-scope refund call with SCOPE_VIOLATION.");
             return JSON.stringify(response);
           }
@@ -163,10 +166,13 @@ export default function Home() {
   }
 
   function executeRefunds() {
-    const response = validateRefund({ transactions: transactions.map(({ id, amount }: { id: string; amount: number }) => ({ id, amount })) }, maxAmount);
+    const plan = planRefunds(maxAmount);
+    const response = validateRefund({ transactions: plan.approved.map(({ id, amount }: { id: string; amount: number }) => ({ id, amount })) }, maxAmount);
     setToolResult(response);
-    setPhase("completed");
-    addLog("Sloth refunded all three verified duplicates within the approved scope.");
+    if (response.ok) {
+      setPhase("completed");
+      addLog(plan.deferred.length ? `Sloth refunded ${plan.approved.length} duplicates and left ${plan.deferred.length} untouched outside the adjusted cap.` : "Sloth refunded all three verified duplicates within the approved scope.");
+    }
   }
 
   function endRun() {
@@ -204,6 +210,8 @@ export default function Home() {
     denied: "Adapted"
   }[phase];
   const statusClass = phase === "granted" ? "granted" : phase === "completed" || phase === "closed" || phase === "denied" ? "done" : isRunning ? "running" : "";
+  const refundedCount = Array.isArray(toolResult?.refunds) ? toolResult.refunds.length : 0;
+  const deferredCount = Math.max(0, transactions.length - refundedCount);
 
   return (
     <main className="shell">
@@ -260,7 +268,7 @@ export default function Home() {
             {toolResult && <pre className="tool-result" aria-live="polite">{JSON.stringify(toolResult, null, 2)}</pre>}
           </div>}
 
-          {phase === "completed" && <div className="completion"><div><span className="check">✓</span><div><p className="eyebrow">Outcome delivered</p><h3>3 duplicate charges refunded.</h3><p>Sloth is done. Revoke the temporary authority.</p></div></div><button className="quiet compact" onClick={endRun}>End run &amp; revoke authority</button></div>}
+          {phase === "completed" && <div className="completion"><div><span className="check">✓</span><div><p className="eyebrow">Outcome delivered</p><h3>{refundedCount} duplicate charge{refundedCount === 1 ? "" : "s"} refunded.</h3><p>{deferredCount ? `${deferredCount} transaction${deferredCount === 1 ? " was" : "s were"} left untouched because the adjusted grant did not cover the amount.` : "Sloth is done. Revoke the temporary authority."}</p></div></div><button className="quiet compact" onClick={endRun}>End run &amp; revoke authority</button></div>}
 
           {(phase === "closed" || phase === "denied") && <div className="completion"><div><span className="check">✓</span><div><p className="eyebrow">Safe stop</p><h3>{phase === "closed" ? "Temporary authority removed." : "Decision respected."}</h3><p>{phase === "closed" ? "The refund tool no longer exists in the agent’s tool surface." : "No financial capability was exposed."}</p></div></div><button className="quiet compact" onClick={replay}>Replay demo</button></div>}
 
