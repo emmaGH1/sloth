@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyInvestigationFinding, createEmptyFindings, defaultCapabilityRequest, issueSummary, planRefunds, retryPayment, validateCapabilityRequest, validateRefund } from "../scope.js";
+import { applyInvestigationFinding, applyRefundSpend, createEmptyFindings, defaultCapabilityRequest, deriveGrant, issueSummary, planRefunds, retryPayment, shouldConsumeGrant, summarizeRefundResult, validateCapabilityRequest, validateRefund } from "../scope.js";
 
 const fullGrant = defaultCapabilityRequest.scope;
 
@@ -14,12 +14,12 @@ test("accepts and preserves a valid capability request scope", () => {
 test("rejects unsupported, unverified, duplicate, or unbounded capability requests", () => {
   const result = validateCapabilityRequest({
     capability: "refund_everything",
-    scope: { transactions: ["TX-48", "TX-48", "TX-999"], maxAmount: Infinity },
+    scope: { transactions: ["TX-48", "TX-48", "TX-999"], maxAmount: Infinity, maxTotalAmount: Infinity },
     reason: ""
   });
   assert.equal(result.ok, false);
   assert.equal(result.error.code, "INVALID_CAPABILITY_REQUEST");
-  assert.deepEqual(result.error.violations, ["UNSUPPORTED_CAPABILITY", "REASON_REQUIRED", "DUPLICATE_TRANSACTION", "TRANSACTION_NOT_VERIFIED", "INVALID_MAX_AMOUNT"]);
+  assert.deepEqual(result.error.violations, ["UNSUPPORTED_CAPABILITY", "REASON_REQUIRED", "DUPLICATE_TRANSACTION", "TRANSACTION_NOT_VERIFIED", "INVALID_MAX_AMOUNT", "INVALID_MAX_TOTAL"]);
 });
 
 test("allows the three specifically approved duplicate refunds", () => {
@@ -134,5 +134,44 @@ test("plans refunds bounded by both per-item cap and aggregate cap", () => {
   const plan = planRefunds({ transactions: ["TX-48", "TX-72", "TX-184"], maxAmount: 72, maxTotalAmount: 150 });
   assert.deepEqual(plan.approved.map(({ id }) => id), ["TX-48", "TX-72"]);
   assert.deepEqual(plan.deferred.map(({ id }) => id), ["TX-184"]);
+});
+
+test("deriveGrant copies the request payload and applies human adjustments", () => {
+  const grant = deriveGrant(defaultCapabilityRequest, { maxAmount: 72, maxTotalAmount: 150 });
+  assert.deepEqual(grant.transactions, ["TX-48", "TX-72", "TX-184"]);
+  assert.equal(grant.maxAmount, 72);
+  assert.equal(grant.maxTotalAmount, 150);
+  assert.equal(grant.spentAmount, 0);
+  assert.notEqual(grant.transactions, defaultCapabilityRequest.scope.transactions);
+});
+
+test("rejects a second refund that would exceed remaining aggregate budget", () => {
+  const grant = { transactions: ["TX-48", "TX-72", "TX-184"], maxAmount: 72, maxTotalAmount: 150, spentAmount: 120 };
+  const result = validateRefund({ transactions: [{ id: "TX-184", amount: 72 }] }, grant);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.spentAmount, 120);
+  assert.equal(result.error.remainingAmount, 30);
+  assert.deepEqual(result.error.rejected[0].violations, ["AGGREGATE_AMOUNT_OVER_GRANT"]);
+});
+
+test("allows a second refund that fits in remaining aggregate budget", () => {
+  const grant = { transactions: ["TX-48", "TX-72"], maxAmount: 72, maxTotalAmount: 150, spentAmount: 48 };
+  const result = validateRefund({ transactions: [{ id: "TX-72", amount: 72 }] }, grant);
+  assert.equal(result.ok, true);
+  assert.equal(applyRefundSpend(grant, result.refunds).spentAmount, 120);
+});
+
+test("plans remaining refunds after spend against the aggregate cap", () => {
+  const plan = planRefunds({ transactions: ["TX-48", "TX-72", "TX-184"], maxAmount: 184, maxTotalAmount: 150, spentAmount: 120 });
+  assert.deepEqual(plan.approved.map(({ id }) => id), []);
+  assert.deepEqual(plan.deferred.map(({ id }) => id), ["TX-48", "TX-72", "TX-184"]);
+});
+
+test("consumes the grant only after an in-scope success", () => {
+  const allowed = validateRefund({ transactions: [{ id: "TX-48", amount: 48 }] }, fullGrant);
+  const blocked = validateRefund({ transactions: [{ id: "TX-999", amount: 220 }] }, fullGrant);
+  assert.equal(shouldConsumeGrant(allowed), true);
+  assert.equal(shouldConsumeGrant(blocked), false);
+  assert.match(summarizeRefundResult(blocked), /TRANSACTION_NOT_ALLOWED/);
 });
 

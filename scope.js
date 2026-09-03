@@ -4,6 +4,9 @@ export const confirmedTransactions = [
   { id: "TX-184", amount: 184, customer: "Kiteworks" }
 ];
 
+export const confirmedTotalAmount = confirmedTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+export const GRANT_TTL_SECONDS = 600;
+
 export const retryablePayments = ["PAY-17", "PAY-23", "PAY-31", "PAY-42", "PAY-56", "PAY-63", "PAY-77", "PAY-88"];
 
 export const issueSummary = {
@@ -55,15 +58,31 @@ export const defaultCapabilityRequest = {
   capability: "refund_scoped_transactions",
   scope: {
     transactions: confirmedTransactions.map(({ id }) => id),
-    maxAmount: 184
+    maxAmount: 184,
+    maxTotalAmount: confirmedTotalAmount
   },
   reason: "Three duplicate charges were confirmed through transaction inspection."
 };
+
+function isPositiveFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function grantMaxTotal(grant) {
+  return isPositiveFiniteNumber(grant?.maxTotalAmount) ? grant.maxTotalAmount : Infinity;
+}
+
+function grantSpentAmount(grant) {
+  return typeof grant?.spentAmount === "number" && Number.isFinite(grant.spentAmount) && grant.spentAmount > 0
+    ? grant.spentAmount
+    : 0;
+}
 
 export function validateCapabilityRequest(input) {
   const allowedIds = new Set(confirmedTransactions.map(({ id }) => id));
   const transactions = input?.scope?.transactions;
   const maxAmount = input?.scope?.maxAmount;
+  const maxTotalAmount = input?.scope?.maxTotalAmount;
   const violations = [];
 
   if (input?.capability !== "refund_scoped_transactions") violations.push("UNSUPPORTED_CAPABILITY");
@@ -74,7 +93,8 @@ export function validateCapabilityRequest(input) {
     if (new Set(transactions).size !== transactions.length) violations.push("DUPLICATE_TRANSACTION");
     if (transactions.some((id) => typeof id !== "string" || !allowedIds.has(id))) violations.push("TRANSACTION_NOT_VERIFIED");
   }
-  if (typeof maxAmount !== "number" || !Number.isFinite(maxAmount) || maxAmount <= 0) violations.push("INVALID_MAX_AMOUNT");
+  if (!isPositiveFiniteNumber(maxAmount)) violations.push("INVALID_MAX_AMOUNT");
+  if (!isPositiveFiniteNumber(maxTotalAmount)) violations.push("INVALID_MAX_TOTAL");
 
   if (violations.length) {
     return {
@@ -91,10 +111,40 @@ export function validateCapabilityRequest(input) {
     ok: true,
     request: {
       capability: input.capability,
-      scope: { transactions: [...transactions], maxAmount },
+      scope: { transactions: [...transactions], maxAmount, maxTotalAmount },
       reason: input.reason.trim()
     }
   };
+}
+
+export function deriveGrant(request, adjustments = {}) {
+  return {
+    transactions: [...request.scope.transactions],
+    maxAmount: adjustments.maxAmount ?? request.scope.maxAmount,
+    maxTotalAmount: adjustments.maxTotalAmount ?? request.scope.maxTotalAmount,
+    spentAmount: 0
+  };
+}
+
+export function applyRefundSpend(grant, refunds) {
+  const extra = (refunds || []).reduce((sum, item) => sum + (Number.isFinite(item?.amount) ? item.amount : 0), 0);
+  return { ...grant, spentAmount: grantSpentAmount(grant) + extra };
+}
+
+export function shouldConsumeGrant(response) {
+  return Boolean(response?.ok);
+}
+
+export function summarizeRefundResult(response) {
+  if (response?.ok) {
+    const count = response.refunds.length;
+    return `In-scope refund accepted (${count} transaction${count === 1 ? "" : "s"}).`;
+  }
+  const code = response?.error?.code || "ERROR";
+  const details = (response?.error?.rejected || [])
+    .map((item) => `${item.id}: ${(item.violations || []).join(", ")}`)
+    .join("; ");
+  return details ? `Refund blocked (${code}): ${details}.` : `Refund blocked (${code}).`;
 }
 
 export function retryPayment(input) {
@@ -120,10 +170,10 @@ export function retryPayment(input) {
 export function planRefunds(grant) {
   const allowedIds = new Set(grant.transactions);
   const requested = confirmedTransactions.filter((transaction) => allowedIds.has(transaction.id));
-  const maxTotal = typeof grant.maxTotalAmount === "number" && Number.isFinite(grant.maxTotalAmount) ? grant.maxTotalAmount : Infinity;
+  const maxTotal = grantMaxTotal(grant);
   const approved = [];
   const deferred = [];
-  let currentTotal = 0;
+  let currentTotal = grantSpentAmount(grant);
 
   for (const transaction of requested) {
     if (transaction.amount <= grant.maxAmount && (currentTotal + transaction.amount) <= maxTotal) {
@@ -170,11 +220,13 @@ export function validateRefund(input, grant) {
     seen.add(item?.id);
   }
 
-  const maxTotal = typeof grant.maxTotalAmount === "number" && Number.isFinite(grant.maxTotalAmount) ? grant.maxTotalAmount : Infinity;
-  if (totalRequestedAmount > maxTotal) {
+  const maxTotal = grantMaxTotal(grant);
+  const spentAmount = grantSpentAmount(grant);
+  const projectedTotal = spentAmount + totalRequestedAmount;
+  if (projectedTotal > maxTotal) {
     rejected.push({
       id: "BATCH_TOTAL",
-      amount: totalRequestedAmount,
+      amount: projectedTotal,
       violations: ["AGGREGATE_AMOUNT_OVER_GRANT"]
     });
   }
@@ -188,6 +240,8 @@ export function validateRefund(input, grant) {
         allowedTransactions: [...grant.transactions],
         maxAmountPerTransaction: grant.maxAmount,
         maxTotalAmount: Number.isFinite(maxTotal) ? maxTotal : undefined,
+        spentAmount,
+        remainingAmount: Number.isFinite(maxTotal) ? Math.max(0, maxTotal - spentAmount) : undefined,
         transactionLimits: Object.fromEntries(confirmedTransactions.filter(({ id }) => allowedIds.has(id)).map((item) => [item.id, item.amount])),
         rejected
       }
