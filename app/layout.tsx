@@ -1,11 +1,23 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import "../styles.css";
 
-export const metadata: Metadata = {
-  title: "Sloth — Just-in-time authority for agents",
-  description: "Delegate outcomes, not unlimited access. Sloth demonstrates narrow, temporary WebMCP capability grants.",
-  applicationName: "Sloth"
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host") || "localhost:3000";
+  const protocol = requestHeaders.get("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
+  const origin = `${protocol}://${host}`;
+  const title = "Sloth — Just-in-time authority for agents";
+  const description = "Delegate outcomes, not unlimited access. Sloth demonstrates narrow, temporary WebMCP capability grants.";
+
+  return {
+    title,
+    description,
+    applicationName: "Sloth",
+    openGraph: { title, description, type: "website", url: origin, images: [{ url: `${origin}/og.png`, width: 1792, height: 909, alt: "Sloth — Delegate outcomes, not unlimited access." }] },
+    twitter: { card: "summary_large_image", title, description, images: [`${origin}/og.png`] }
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#11120f"
