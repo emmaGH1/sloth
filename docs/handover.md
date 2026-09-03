@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 2 — runnable demo scaffold complete.** The repository was empty at intake. Sloth is the working name and the product wrapper is a fictional SaaS payment-operations console.
+**Checkpoint 3 — implementation committed and published.** The repository was empty at intake. Sloth is the working name and the product wrapper is a fictional SaaS payment-operations console.
 
 ## Locked decisions
 
@@ -19,6 +19,8 @@
 - The page uses `document.modelContext.registerTool` (with a legacy `navigator.modelContext` fallback) when available. Four safe tools register on page load, while the refund tool is registered only after a grant and removed with `AbortController.abort()`.
 - The visual fallback mirrors the same scope-enforcement logic and produces a structured `SCOPE_VIOLATION` response.
 - Scope validation is isolated in `scope.js` and covered by `node --test tests/scope.test.mjs` for the approved, unapproved, and over-limit cases.
+- Verified locally: `node --check app.js`, `node --test tests/scope.test.mjs` (3 passing), whitespace diff check, and an HTTP 200 response from the local preview server.
+- Published commits on `main`: `a5746a5` (controls and handover) and `2628dcc` (full demo implementation).
 
 ## Risks / open items
 
@@ -28,4 +30,4 @@
 
 ## NEXT ACTION
 
-Run `node --test tests/scope.test.mjs`, then serve locally over HTTP and run the README judge path in a WebMCP-enabled Chrome or ChatGPT Site Tools environment. Inspect the tool inventory before and after approval/revocation, then record exact browser results here.
+Open the published project in the user’s WebMCP-enabled Chrome or ChatGPT Site Tools environment and run the README judge path. Inspect the tool inventory before/after approval and after revocation, then record exact native browser results here. If the preview API is unavailable, use the in-console fallback and preserve the scope-enforcement output in the demo recording.
