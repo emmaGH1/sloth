@@ -22,8 +22,8 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .brand { color: var(--ink); font: 600 15px var(--mono); letter-spacing: .13em; text-decoration: none; display: flex; align-items: center; gap: 9px; }
 .brand-mark { width: 27px; height: 27px; display: grid; place-items: center; background: var(--acid); color: #171a0c; font-weight: 500; letter-spacing: 0; transform: rotate(-8deg); }
 .tagline { margin: 0; color: var(--muted); font-size: 13px; } .tagline em { color: var(--ink); font-style: normal; }
-.connection { justify-self: end; color: var(--muted); font: 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; } .connection span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); margin-right: 6px; }
-.connection.ready span { background: var(--mint); box-shadow: 0 0 13px var(--mint); } .connection.fallback span { background: var(--muted); }
+.connection { justify-self: end; display: flex; align-items: center; gap: 8px; padding: 6px 9px; border: 1px solid var(--line); color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; } .connection span { display: inline-block; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--amber); } .connection small, .connection strong { display: block; font: inherit; line-height: 1.2; } .connection small { color: #777a70; font-size: 8px; } .connection strong { color: var(--ink); font-size: 10px; font-weight: 500; }
+.connection.ready { border-color: rgba(102,214,174,.35); } .connection.ready span { background: var(--mint); box-shadow: 0 0 13px var(--mint); } .connection.ready strong { color: var(--mint); } .connection.fallback span { background: var(--muted); }
 .hero { padding: 70px 0 62px 112px; max-width: 850px; }
 .eyebrow { color: var(--acid); font: 11px var(--mono); text-transform: uppercase; letter-spacing: .11em; margin: 0 0 14px; }
 h1 { font-size: clamp(42px, 6.5vw, 82px); line-height: .95; letter-spacing: -.075em; margin: 0; font-weight: 600; } h1 span { color: var(--acid); }

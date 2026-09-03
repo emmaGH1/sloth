@@ -264,11 +264,14 @@ export default function Home() {
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Sloth home"><span className="brand-mark">S</span> SLOTH</a>
         <p className="tagline">Delegate outcomes, <em>not unlimited access.</em></p>
-        <div className={`connection ${nativeStatus}`} aria-live="polite"><span />{nativeStatus === "ready" ? "WebMCP ready" : nativeStatus === "fallback" ? "Visual fallback active" : "Checking WebMCP"}</div>
+        <div className={`connection ${nativeStatus}`} aria-live="polite" aria-label={nativeStatus === "ready" ? "WebMCP native tools online" : nativeStatus === "fallback" ? "WebMCP unavailable; demo replay mode" : "Checking WebMCP connection"}>
+          <span aria-hidden="true" />
+          <div><small>WebMCP</small><strong>{nativeStatus === "ready" ? "Native tools online" : nativeStatus === "fallback" ? "Demo replay mode" : "Checking connection"}</strong></div>
+        </div>
       </header>
 
       <section className="hero" id="top">
-        <p className="eyebrow">Payment operations / 09:41 WAT</p>
+        <p className="eyebrow">Payment operations / controlled scenario</p>
         <h1>Clean up today’s<br /><span>payment problems.</span></h1>
         <p className="lead">Hand Sloth the outcome. It only stops when it genuinely needs your authority.</p>
         {phase === "idle" ? <button className="primary" onClick={startRun}>Start delegated run <span aria-hidden="true">→</span></button> : phase === "closed" || phase === "denied" ? <button className="primary" onClick={replay}>Replay judge path <span aria-hidden="true">↻</span></button> : <button className="primary" disabled>Delegated run in progress</button>}
