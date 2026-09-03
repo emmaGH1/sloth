@@ -14,6 +14,11 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description,
     applicationName: "Sloth",
+    icons: {
+      icon: "/logo.png",
+      apple: "/logo.png",
+      shortcut: "/logo.png"
+    },
     openGraph: { title, description, type: "website", url: origin, images: [{ url: `${origin}/og.png`, width: 1792, height: 909, alt: "Sloth — Delegate outcomes, not unlimited access." }] },
     twitter: { card: "summary_large_image", title, description, images: [`${origin}/og.png`] }
   };
@@ -27,6 +32,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <head>
+        <link rel="icon" type="image/png" href="/logo.png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
