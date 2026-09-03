@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 16 — session handoff prepared.** Sloth is publicly live at `https://sloth-webmcp.theboyemma.chatgpt.site`. The public GitHub repository is `https://github.com/emmaGH1/sloth.git` and includes an MIT license. The deployed application is Sites version 5 from source commit `a159a7e`; current `main` (`476ddb3`) only adds this handover record.
+**Checkpoint 17 — public native WebMCP retest passed.** Sloth is publicly live at `https://sloth-webmcp.theboyemma.chatgpt.site`. The public GitHub repository is `https://github.com/emmaGH1/sloth.git` and includes an MIT license. The deployed application is Sites version 5 from source commit `a159a7e`; current `main` is `6a16c7e`.
 
 ## Product in one sentence
 
@@ -31,31 +31,18 @@
 - `npm run build`: passes (2026-09-03).
 - GitHub was tested anonymously with credentials disabled and is public.
 - The public Sites URL returned HTTP 200 without a signed-in session.
-- Earlier native Chrome Inspector QA passed the original 4 → 5 → 4 lifecycle, adjusted-grant behavior, denial, replay, and out-of-scope structured error.
+- Fresh public native Chrome verification on 2026-09-03 with Chrome 152.0.7977.75, `enable-webmcp-testing`, and Google’s Model Context Tool Inspector (`gbpdfapgefenggkahomfgkhfehlcenpd` 1.9.13). Native `document.modelContext.getTools()` / `executeTool()` were used — the same APIs the Inspector uses:
 
-## Important open verification
-
-The current public release needs one fresh native WebMCP retest because its scope-request and retry-policy contracts changed after the earlier Inspector test.
-
-1. Open the public URL in Chrome with WebMCP Inspector enabled and confirm `WebMCP / Native tools online`.
-2. Confirm exactly four baseline tools exist.
-3. Call `inspect_issues`, then call `retry_payment` with `{ "id": "PAY-17" }` and verify success.
-4. Call `retry_payment` with `{ "id": "TX-48" }` and verify `PREAUTHORIZED_POLICY_VIOLATION`.
-5. Call `request_capability` with:
-
-   ```json
-   {
-     "capability": "refund_scoped_transactions",
-     "scope": {
-       "transactions": ["TX-48", "TX-72", "TX-184"],
-       "maxAmount": 184
-     },
-     "reason": "Confirmed duplicate charges"
-   }
-   ```
-
-6. Approve or adjust the request in the page; confirm the fifth tool appears and enforces the granted scope.
-7. Call the refund tool with `TX-999` to verify one `SCOPE_VIOLATION`; complete valid refunds; end the run and confirm the tool count returns to four.
+  1. Header showed `WebMCP / Native tools online`.
+  2. Exactly four baseline tools existed; `refund_scoped_transactions` was absent; authority rail showed `04`.
+  3. `inspect_issues` returned 14 issues, 3 confirmed duplicates, and the retryable payment list.
+  4. `retry_payment` `{ "id": "PAY-17" }` returned `retry_queued` with the one-attempt idempotent policy.
+  5. `retry_payment` `{ "id": "TX-48" }` returned `PREAUTHORIZED_POLICY_VIOLATION`.
+  6. `request_capability` with transactions `TX-48`, `TX-72`, `TX-184`, `maxAmount` 184, and reason `Confirmed duplicate charges` opened the page request card from that payload.
+  7. Adjusting the grant to $72 registered the fifth tool; rail showed `05`; grant strip read `Live · 3 transactions · ≤ $72`.
+  8. `refund_scoped_transactions` with `TX-999` / `$220` returned one `SCOPE_VIOLATION` (`TRANSACTION_NOT_ALLOWED`, `AMOUNT_OVER_GRANT`).
+  9. In-scope refunds of TX-48 and TX-72 succeeded; TX-184 stayed untouched under the $72 cap.
+  10. Ending the run removed `refund_scoped_transactions`; tool count and rail returned to four.
 
 ## Next product batch
 
@@ -74,4 +61,4 @@ Make the investigation state truthful and agent-driven:
 
 ## NEXT ACTION
 
-Run the public native WebMCP verification above. If it passes, implement the truthful, tool-driven investigation state as the next focused batch.
+Implement the truthful, tool-driven investigation state as the next focused batch.
