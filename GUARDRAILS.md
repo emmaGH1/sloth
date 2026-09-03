@@ -9,8 +9,8 @@ The human asks Sloth to clean up payment issues. Sloth investigates with safe to
 ## Non-negotiable capability rules
 
 1. `refund_transaction` is absent before a grant and after a run ends.
-2. A grant names specific transaction IDs and an upper amount limit.
-3. The refund tool checks both constraints and returns structured errors for violations.
+2. A grant names specific transaction IDs, a per-transaction amount limit, and an aggregate amount limit.
+3. The refund tool checks those constraints (including spend from earlier calls) and returns structured errors for violations.
 4. A rejected action causes the agent to adapt instead of pretending it succeeded.
 5. The activity feed must make the authority change legible to a judge.
 6. `retry_payment` is a mutation, not a read-only tool. It must enforce the inspected-failure allowlist, one-attempt limit, and idempotent behavior as pre-authorized policy.
