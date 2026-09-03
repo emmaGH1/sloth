@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 9 — PRD-lite locked.** Sloth Sites version 3 remains live at `https://sloth-webmcp.theboyemma.chatgpt.site`; the product promise, truthful tool contracts, judge path, visual direction, success criteria, non-goals, and submission gate are now defined in `docs/prd-lite.md`.
+**Checkpoint 10 — public-submission groundwork complete.** The repository now includes an MIT license, the GitHub remote was verified anonymously readable with credentials disabled, and the Pinterest-derived logo was explicitly rejected. Sloth Sites version 3 remains live at `https://sloth-webmcp.theboyemma.chatgpt.site`; changing its audience from custom to public is waiting on the user’s explicit approval of that persistent access-control change.
 
 ## Locked decisions
 
@@ -39,9 +39,10 @@
 - WebMCP remains a preview API and requires the appropriate browser support or testing flag. The app degrades visibly and safely if unavailable.
 - Automated browser control could not load the local server because its localhost client is blocked in this environment. The local server itself returned HTTP 200; repeat browser verification directly in the user’s Chrome/ChatGPT environment.
 - Native Chrome verification passed end to end on 2026-09-03 with Google’s Model Context Tool Inspector: four safe tools were discovered, safe tools returned expected results, the authority request changed the page, approval dynamically exposed `refund_scoped_transactions`, an out-of-scope call returned `SCOPE_VIOLATION`, the adjusted $72 grant refunded two transactions and deferred one, and ending the run removed the temporary tool.
-- Preliminary brand review found the `Sloth` name already in use across software, AI, and finance products. The supplied running-sloth image appears to have been downloaded from ChatGPT and had no obvious match in a text/image search, but exact reverse-image verification was blocked by a CAPTCHA. Treat it as an uncleared candidate asset; do not claim trademark exclusivity.
+- Anonymous Git access passed with credential helpers disabled: `git ls-remote https://github.com/emmaGH1/sloth.git HEAD` resolved the current public `main` state.
+- Preliminary brand review found the `Sloth` name already in use across software, AI, and finance products. The supplied running-sloth image was derived from a Pinterest reference and is rejected for the submission because its provenance and reuse rights are unclear. Keep the existing “S” mark and do not claim trademark exclusivity.
 - The PRD identifies two correctness gaps for the next product batch: `request_capability` must carry the displayed scope, and `retry_payment` must be framed and enforced as a pre-authorized constrained mutation rather than inherently safe.
 
 ## NEXT ACTION
 
-Complete Batch 1 submission compliance: add an MIT license, confirm the repository is public, make the Sites deployment judge-accessible, and verify both while logged out.
+After explicit user approval, change the Sites audience from `custom` to `public` and verify the live URL without a signed-in session. In parallel, complete Batch 2 correctness: make the capability-request payload the source of truth for the displayed/enforced scope and constrain `retry_payment` under an explicit pre-authorization policy.

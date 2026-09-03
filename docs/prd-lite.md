@@ -85,7 +85,7 @@ Payment refunds are the concrete proof. The reusable interaction model applies w
 
 ## Brand status
 
-“Sloth” remains the hackathon working name. The proposed running-sloth wordmark is memorable and creates an intentional slow/fast contrast, but it is **not cleared for production trademark use**. The word is already used by multiple software, AI, and finance products, and AI-generated imagery may not be unique. Keep the current simple in-product mark until the candidate artwork’s provenance and relevant trademark classes are formally cleared; do not claim exclusivity in the submission.
+"Sloth" remains the hackathon working name. The proposed running-sloth wordmark was derived from a Pinterest reference and is **rejected for this submission** because its provenance and reuse rights are not clear. Keep the current simple in-product “S” mark for the challenge. The name is already used by multiple software, AI, and finance products, so do not claim trademark exclusivity; revisit naming and formal clearance only after the hackathon.
 
 ## Submission gate
 
