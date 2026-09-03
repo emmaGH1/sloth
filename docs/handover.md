@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 3 — implementation committed and published.** The repository was empty at intake. Sloth is the working name and the product wrapper is a fictional SaaS payment-operations console.
+**Checkpoint 4 — Sites migration built successfully.** Sloth is now packaged in the supported vinext/Cloudflare Sites runtime while preserving the locked payment-operations demo.
 
 ## Locked decisions
 
@@ -21,13 +21,16 @@
 - Scope validation is isolated in `scope.js` and covered by `node --test tests/scope.test.mjs` for the approved, unapproved, and over-limit cases.
 - Verified locally: `node --check app.js`, `node --test tests/scope.test.mjs` (3 passing), whitespace diff check, and an HTTP 200 response from the local preview server.
 - Published commits on `main`: `a5746a5` (controls and handover) and `2628dcc` (full demo implementation).
+- Migrated the static prototype into a single-route React client app using the Sites starter runtime and `.openai/hosting.json`.
+- `npm test` passes all 3 scope-enforcement tests and `npm run build` produces the required `dist/server/index.js` bundle.
 
 ## Risks / open items
 
 - Native browser testing remains required: WebMCP is a preview API and may require an enabled flag, origin trial, or browser extension. The app degrades visibly and safely if unavailable.
 - Automated browser control could not load the local server because its localhost client is blocked in this environment. The local server itself returned HTTP 200; repeat browser verification directly in the user’s Chrome/ChatGPT environment.
 - The GitHub remote reported `origin/main [gone]` on clone because the remote was empty; pushing will require network access and repository permissions.
+- Sites project creation and hosted native WebMCP verification are still pending.
 
 ## NEXT ACTION
 
-Open the published project in the user’s WebMCP-enabled Chrome or ChatGPT Site Tools environment and run the README judge path. Inspect the tool inventory before/after approval and after revocation, then record exact native browser results here. If the preview API is unavailable, use the in-console fallback and preserve the scope-enforcement output in the demo recording.
+Generate and verify the Sloth social preview, create the Sites project, publish the validated build privately, then run the README judge path on the deployed HTTPS URL in WebMCP-enabled Chrome and ChatGPT Site Tools.

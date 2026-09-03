@@ -11,13 +11,14 @@ Sloth is a demo-first payment-operations console that shows an AI agent requesti
 
 ## Run locally
 
-Serve the directory over HTTP, then open the localhost URL in a WebMCP-enabled browser:
+Install the locked dependencies and start the Sites development server, then open the printed local URL in a WebMCP-enabled browser:
 
 ```powershell
-python -m http.server 4173
+npm ci
+npm run dev
 ```
 
-Open `http://localhost:4173`.
+Create the production bundle with `npm run build`.
 
 ## Judge path
 
@@ -29,4 +30,4 @@ Open `http://localhost:4173`.
 6. Select **Execute verified refunds**.
 7. Select **End run & revoke authority** and watch the capability disappear.
 
-The in-console simulation is intentional: it preserves the demo story even when a browser does not expose the experimental WebMCP API. Native compatibility is reported in the header.
+The in-console simulation is intentional: it preserves the demo story even when a browser does not expose the experimental WebMCP API. Native compatibility is reported in the header. The project is packaged for ChatGPT Sites hosting.
