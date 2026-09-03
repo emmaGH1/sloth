@@ -32,8 +32,6 @@ const baselineTools = [
   { name: "request_capability", label: "Boundary request" }
 ];
 
-const EVALUATOR_PROMPT = "Inspect today's payment issues, retry any pre-authorized failures, and request narrow capability to refund confirmed duplicate charges up to the verified amounts.";
-
 function getModelContext(): ModelContext | undefined {
   const doc = document as Document & { modelContext?: ModelContext };
   const nav = navigator as Navigator & { modelContext?: ModelContext };
@@ -54,7 +52,6 @@ export default function Home() {
   const [maxAmount, setMaxAmount] = useState(184);
   const [maxTotalAmount, setMaxTotalAmount] = useState(150);
   const [ttlSeconds, setTtlSeconds] = useState(60);
-  const [promptCopied, setPromptCopied] = useState(false);
   const [adjusting, setAdjusting] = useState(false);
   const [grantActive, setGrantActive] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<CapabilityRequest>(defaultCapabilityRequest);
@@ -288,15 +285,6 @@ export default function Home() {
     addLog("Human denied refund authority. DO_NOT_RETRY policy engaged. Sloth records duplicates and halts safely.");
   }
 
-  function copyEvaluatorPrompt() {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      void navigator.clipboard.writeText(EVALUATOR_PROMPT);
-      setPromptCopied(true);
-      setTimeout(() => setPromptCopied(false), 2200);
-      addLog("Evaluator agent prompt copied to clipboard.");
-    }
-  }
-
   function simulateExpiry() {
     if (!grantActive) return;
     setTtlSeconds(0);
@@ -475,11 +463,6 @@ export default function Home() {
               )}
               <a href="#features" className="secondary">Explore Architecture <span aria-hidden="true">↓</span></a>
             </div>
-            <div style={{ marginTop: "18px" }}>
-              <button className={`prompt-copy-chip${promptCopied ? " copied" : ""}`} onClick={copyEvaluatorPrompt} title="Click to copy test prompt for ChatGPT Desktop / Chrome Inspector">
-                <span>{promptCopied ? "✓ Evaluation Prompt Copied to Clipboard" : "📋 Copy WebMCP / ChatGPT Evaluation Prompt"}</span>
-              </button>
-            </div>
             {nativeStatus === "ready" ? (
               <p className="hero-note">Native tools are live. Connect your WebMCP agent or Inspector to interact.</p>
             ) : (
@@ -568,11 +551,6 @@ export default function Home() {
           <p className="eyebrow">Interactive Operations Console</p>
           <h2>Delegated Outcome Workbench</h2>
           <p>Watch the agent investigate payment anomalies, execute pre-authorized recoveries, and request scoped human authority when encountering hard boundaries.</p>
-          <div style={{ marginTop: "12px" }}>
-            <button className={`prompt-copy-chip${promptCopied ? " copied" : ""}`} onClick={copyEvaluatorPrompt}>
-              <span>{promptCopied ? "✓ Copied to Clipboard" : "📋 Copy Prompt for Native Agent"}</span>
-            </button>
-          </div>
         </div>
 
         <div className="console" aria-label="Sloth operations console">

@@ -185,11 +185,6 @@ a { color: inherit; text-decoration: none; }
 .test-suite-btn { font: 11px var(--mono); background: rgba(255,255,255,.03); border: 1px solid rgba(255,197,110,.3); color: var(--amber); padding: 6px 10px; cursor: pointer; transition: all .15s; }
 .test-suite-btn:hover { background: rgba(255,197,110,.14); border-color: var(--amber); }
 
-.prompt-copy-chip { display: inline-flex; align-items: center; gap: 8px; background: rgba(215,252,98,.08); border: 1px solid rgba(215,252,98,.25); padding: 6px 12px; font: 11px var(--mono); color: var(--acid); cursor: pointer; transition: all .15s; border-radius: 2px; }
-.prompt-copy-chip:hover { background: rgba(215,252,98,.16); border-color: var(--acid); }
-.prompt-copy-chip.copied { background: rgba(102,214,174,.18); border-color: var(--mint); color: var(--mint); }
-
-
 .completion { display: flex; justify-content: space-between; align-items: center; border-color: rgba(102,214,174,.5); background: #1b2520; gap: 18px; flex-wrap: wrap; }
 .completion.expired-card { border-color: rgba(255,197,110,.5); background: #252015; }
 .completion > div { display: flex; gap: 13px; align-items: flex-start; }
