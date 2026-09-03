@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 18 — investigation findings are tool-driven.** Sloth is publicly live at `https://sloth-webmcp.theboyemma.chatgpt.site`. The public GitHub repository is `https://github.com/emmaGH1/sloth.git` and includes an MIT license. The deployed application is still Sites version 5 from source commit `a159a7e`. Source on `main` now includes the tool-driven investigation batch and needs a Sites save/deploy.
+**Checkpoint 19 — Vercel judge URL live.** The public GitHub repository is `https://github.com/emmaGH1/sloth.git` (MIT). Submit `https://sloth-webmcp.vercel.app` (production, no auth, commit `ee968f6`, product path from `e5a974e`). ChatGPT Sites `https://sloth-webmcp.theboyemma.chatgpt.site` remains Sites version 5 from `a159a7e` and is optional.
 
 ## Product in one sentence
 
@@ -47,10 +47,11 @@
   10. Ending the run removed `refund_scoped_transactions`; tool count and rail returned to four.
 
 - Local native retest of the investigation batch on `http://localhost:3000` with the same Inspector APIs: idle counts were `— / — / —`; `inspect_issues` revealed `14` and `03` while retries stayed hidden; `PAY-17` incremented retries to `01`; `TX-48` stayed blocked and did not increment; native `request_capability` still opened the grant card; 4 → 5 → 4, `SCOPE_VIOLATION`, and in-scope refunds still passed; reset hid the counts again; labelled **Replay demo path** then revealed `14 / 03 / 08` and the request card.
+- Public Vercel production `https://sloth-webmcp.vercel.app` returned HTTP 200 without a signed-in session. Idle HTML shows `— / — / —`. Native Inspector retest on that URL passed the same investigation, retry, request, 4 → 5 → 4, `SCOPE_VIOLATION`, refund, revoke, and labelled-replay checks (2026-09-03).
 
 ## Risks / open items
 
-- The public chatgpt.site deployment is still Sites version 5 (`a159a7e`) and does not yet include the tool-driven investigation UI. This Grok session does not have ChatGPT Sites save/deploy tools. After push, save a version from the investigation commit and deploy it to the existing public URL.
+- ChatGPT Sites remains on version 5 (`a159a7e`) until Codex usage resets (7 Sep), which is after the submission freeze. Do not wait on it.
 - WebMCP remains a preview API and requires the appropriate browser support or testing flag. The app degrades visibly and safely if unavailable.
 - Do not ship the Pinterest-derived running-sloth logo.
 
@@ -63,4 +64,4 @@
 
 ## NEXT ACTION
 
-Save and deploy the investigation-batch commit to the existing public ChatGPT Site (`https://sloth-webmcp.theboyemma.chatgpt.site`), then repeat the native Inspector path on the live URL to confirm idle counts stay hidden until tool calls.
+Submit on Devpost with live URL `https://sloth-webmcp.vercel.app`, public repo, MIT, and a <3-minute narrated YouTube demo. Freeze all materials at 1:00pm PDT.

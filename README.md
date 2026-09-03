@@ -10,7 +10,7 @@ Not a production processor. No real funds, auth, or customer data. “Sloth” i
 
 - App: https://sloth-webmcp.vercel.app
 - Repo: https://github.com/emmaGH1/sloth.git (MIT)
-- Commit: `e5a974e`
+- Commit: `ee968f6` (judge path from `e5a974e`)
 
 ## Tools
 
