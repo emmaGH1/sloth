@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 19 — Vercel judge URL live.** The public GitHub repository is `https://github.com/emmaGH1/sloth.git` (MIT). Submit `https://sloth-webmcp.vercel.app` (production, no auth, commit `ee968f6`, product path from `e5a974e`). ChatGPT Sites `https://sloth-webmcp.theboyemma.chatgpt.site` remains Sites version 5 from `a159a7e` and is optional.
+**Checkpoint 20 — Comprehensive README rewrite & engineering showcase complete.** The public GitHub repository is `https://github.com/emmaGH1/sloth.git` (MIT). Production deployment is live at `https://sloth-webmcp.vercel.app`. Test suite verified at 17/17 passing tests.
 
 ## Product in one sentence
 
@@ -21,37 +21,26 @@
 - Four baseline WebMCP tools register on load: `inspect_issues`, `inspect_transaction`, `retry_payment`, and `request_capability`.
 - `retry_payment` is a constrained, idempotent pre-authorized mutation. `PAY-17` is accepted; arbitrary IDs such as `TX-48` return `PREAUTHORIZED_POLICY_VIOLATION`.
 - `request_capability` validates capability, verified transaction IDs, maximum amount, and reason. Its payload is the source of truth for the human approval card.
-- Approving a request dynamically registers `refund_scoped_transactions`. It enforces the immutable approved IDs and cap with structured `SCOPE_VIOLATION` errors.
+- Approving a request dynamically registers `refund_scoped_transactions`. It enforces immutable approved IDs, per-transaction cap, and aggregate batch cap (`maxTotalAmount`) with structured `SCOPE_VIOLATION` errors.
+- Active capability grant features a 60-second Time-To-Live (TTL) countdown with automatic capability unregistration upon expiration, and interactive fast-forward simulation.
+- Audit ledger export: generates structured `sloth-audit-ledger-[timestamp].json` containing every intent, tool call, violation, and revocation event.
 - Adjusting to $72 refunds TX-48 and TX-72 while deferring TX-184. Ending a run removes the temporary tool.
 - Investigation counts start empty (`—`) and appear only when the matching tool runs: `inspect_issues` reveals reviewed issues and confirmed duplicates, `inspect_transaction` accumulates verified duplicates, and successful `retry_payment` calls accumulate retries. A blocked retry does not increment the count.
 - When native WebMCP is online, the hero tells the agent to investigate by calling tools. **Replay demo path** is a labelled fallback, not the primary proof. Without native WebMCP, **Start delegated run** still replays the story under **Demo replay mode**.
 - The header reads `Payment operations / controlled scenario` and presents a composed `WebMCP / Native tools online` status; it falls back to `Demo replay mode` when native WebMCP is unavailable.
+- README overhauled with Mermaid sequence diagram, state machine lifecycle (4 → 5 → 4), exact JSON schemas, dual-track judge reproduction guide (Track A: Native WebMCP / Inspector, Track B: 1-Click Interactive Console), and enterprise impact framing.
 
 ## Verified state
 
-- `npm test`: 15 passing request, retry-policy, scope, planning, and investigation-finding tests (2026-09-03).
-- `npm run build`: passes (2026-09-03).
-- GitHub was tested anonymously with credentials disabled and is public.
-- The public Sites URL returned HTTP 200 without a signed-in session.
-- Fresh public native Chrome verification on 2026-09-03 with Chrome 152.0.7977.75, `enable-webmcp-testing`, and Google’s Model Context Tool Inspector (`gbpdfapgefenggkahomfgkhfehlcenpd` 1.9.13). Native `document.modelContext.getTools()` / `executeTool()` were used — the same APIs the Inspector uses:
-
-  1. Header showed `WebMCP / Native tools online`.
-  2. Exactly four baseline tools existed; `refund_scoped_transactions` was absent; authority rail showed `04`.
-  3. `inspect_issues` returned 14 issues, 3 confirmed duplicates, and the retryable payment list.
-  4. `retry_payment` `{ "id": "PAY-17" }` returned `retry_queued` with the one-attempt idempotent policy.
-  5. `retry_payment` `{ "id": "TX-48" }` returned `PREAUTHORIZED_POLICY_VIOLATION`.
-  6. `request_capability` with transactions `TX-48`, `TX-72`, `TX-184`, `maxAmount` 184, and reason `Confirmed duplicate charges` opened the page request card from that payload.
-  7. Adjusting the grant to $72 registered the fifth tool; rail showed `05`; grant strip read `Live · 3 transactions · ≤ $72`.
-  8. `refund_scoped_transactions` with `TX-999` / `$220` returned one `SCOPE_VIOLATION` (`TRANSACTION_NOT_ALLOWED`, `AMOUNT_OVER_GRANT`).
-  9. In-scope refunds of TX-48 and TX-72 succeeded; TX-184 stayed untouched under the $72 cap.
-  10. Ending the run removed `refund_scoped_transactions`; tool count and rail returned to four.
-
-- Local native retest of the investigation batch on `http://localhost:3000` with the same Inspector APIs: idle counts were `— / — / —`; `inspect_issues` revealed `14` and `03` while retries stayed hidden; `PAY-17` incremented retries to `01`; `TX-48` stayed blocked and did not increment; native `request_capability` still opened the grant card; 4 → 5 → 4, `SCOPE_VIOLATION`, and in-scope refunds still passed; reset hid the counts again; labelled **Replay demo path** then revealed `14 / 03 / 08` and the request card.
-- Public Vercel production `https://sloth-webmcp.vercel.app` returned HTTP 200 without a signed-in session. Idle HTML shows `— / — / —`. Native Inspector retest on that URL passed the same investigation, retry, request, 4 → 5 → 4, `SCOPE_VIOLATION`, refund, revoke, and labelled-replay checks (2026-09-03).
+- `npm test`: 17 passing request, retry-policy, scope, planning, dual-cap, and investigation-finding tests (2026-09-03).
+- `npm run build`: passes cleanly (2026-09-03).
+- GitHub tested anonymously with credentials disabled and is public.
+- Production Vercel deployment (`https://sloth-webmcp.vercel.app`) returns HTTP 200 without sign-in session.
+- Native Chrome 152 + WebMCP Inspector verification passed: 4 baseline tools → request → adjust to $72 → 5 tools with 60s TTL → `SCOPE_VIOLATION` rejection on TX-999 / $220 → valid batch execution → automatic/manual capability revocation returning to 4 tools.
 
 ## Risks / open items
 
-- ChatGPT Sites remains on version 5 (`a159a7e`) until Codex usage resets (7 Sep), which is after the submission freeze. Do not wait on it.
+- ChatGPT Sites remains on version 5 (`a159a7e`) until Codex usage resets (7 Sep), which is after the submission freeze. Do not wait on it; use primary Vercel deployment.
 - WebMCP remains a preview API and requires the appropriate browser support or testing flag. The app degrades visibly and safely if unavailable.
 - Do not ship the Pinterest-derived running-sloth logo.
 
@@ -64,4 +53,4 @@
 
 ## NEXT ACTION
 
-Submit on Devpost with live URL `https://sloth-webmcp.vercel.app`, public repo, MIT, and a <3-minute narrated YouTube demo. Freeze all materials at 1:00pm PDT.
+Record/upload the 3-minute video walkthrough, paste the YouTube link into the README and Devpost submission, and submit on Devpost before deadline freeze.
