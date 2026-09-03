@@ -13,6 +13,8 @@ The human asks Sloth to clean up payment issues. Sloth investigates with safe to
 3. The refund tool checks both constraints and returns structured errors for violations.
 4. A rejected action causes the agent to adapt instead of pretending it succeeded.
 5. The activity feed must make the authority change legible to a judge.
+6. `retry_payment` is a mutation, not a read-only tool. It must enforce the inspected-failure allowlist, one-attempt limit, and idempotent behavior as pre-authorized policy.
+7. The capability-request payload is the only source of truth for the scope shown to the human and later enforced by the refund tool.
 
 ## Scope cuts
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 10 — public-submission groundwork complete.** The repository now includes an MIT license, the GitHub remote was verified anonymously readable with credentials disabled, and the Pinterest-derived logo was explicitly rejected. Sloth Sites version 3 remains live at `https://sloth-webmcp.theboyemma.chatgpt.site`; changing its audience from custom to public is waiting on the user’s explicit approval of that persistent access-control change.
+**Checkpoint 11 — truthful scope contract implemented.** The repository includes an MIT license and is anonymously readable. `request_capability` now validates and preserves the exact transaction IDs, maximum amount, and reason rendered to the human; the approved copy becomes the immutable refund grant. `retry_payment` now enforces a named, inspected-failure pre-authorization policy. Sloth Sites version 3 remains live at `https://sloth-webmcp.theboyemma.chatgpt.site`; changing its audience from custom to public is waiting on the user’s explicit approval of that persistent access-control change.
 
 ## Locked decisions
 
@@ -28,7 +28,7 @@
 - Correctness fixes: rejected instructions are reported once with explicit violation reasons; empty batches, duplicate IDs, non-positive/non-numeric amounts, over-grant amounts, and refunds above the original charge are rejected.
 - Adjusted grants now execute only covered refunds and visibly defer transactions outside the human-approved cap instead of reporting a false full success.
 - Successful native WebMCP refund calls now update the visible outcome state as well as returning the structured result.
-- `npm test` now passes 8 focused scope/planning tests; the Sites production build succeeds.
+- `npm test` now passes 12 focused request, retry-policy, scope, and planning tests; the Sites production build succeeds.
 - Live QA found and corrected a browser compatibility issue in the adjustment slider by binding the direct input event; the displayed and granted cap now follows pointer/keyboard changes.
 - Live Sites QA passed: a $72 adjusted grant exposes the temporary tool, returns one deduplicated structured rejection for `TX-999`, refunds only TX-48 and TX-72, defers TX-184, and removes the tool at run end.
 - Deny and replay paths passed on the deployed site; authority remained at four tools after denial and reset returned to idle.
@@ -40,9 +40,13 @@
 - Automated browser control could not load the local server because its localhost client is blocked in this environment. The local server itself returned HTTP 200; repeat browser verification directly in the user’s Chrome/ChatGPT environment.
 - Native Chrome verification passed end to end on 2026-09-03 with Google’s Model Context Tool Inspector: four safe tools were discovered, safe tools returned expected results, the authority request changed the page, approval dynamically exposed `refund_scoped_transactions`, an out-of-scope call returned `SCOPE_VIOLATION`, the adjusted $72 grant refunded two transactions and deferred one, and ending the run removed the temporary tool.
 - Anonymous Git access passed with credential helpers disabled: `git ls-remote https://github.com/emmaGH1/sloth.git HEAD` resolved the current public `main` state.
+- The capability request rejects unsupported capabilities, blank reasons, duplicate/unverified transaction IDs, and invalid limits before opening the authority UI.
+- The authority UI renders from the validated request payload; approval snapshots that payload into an active grant used by both the native tool description and enforcement function.
+- `retry_payment` now returns `PREAUTHORIZED_POLICY_VIOLATION` for arbitrary IDs and reports its failed-payments-only, one-attempt, idempotent policy on success.
+- WebMCP tool annotations now distinguish read-only inspection, policy-constrained mutation, authority request, and consequential refund execution.
 - Preliminary brand review found the `Sloth` name already in use across software, AI, and finance products. The supplied running-sloth image was derived from a Pinterest reference and is rejected for the submission because its provenance and reuse rights are unclear. Keep the existing “S” mark and do not claim trademark exclusivity.
-- The PRD identifies two correctness gaps for the next product batch: `request_capability` must carry the displayed scope, and `retry_payment` must be framed and enforced as a pre-authorized constrained mutation rather than inherently safe.
+- Native Chrome verification predates Checkpoint 11. Repeat the 4 → 5 → 4 Inspector path after the next Sites deployment, including one allowed retry (`PAY-17`) and one blocked retry (`TX-48`).
 
 ## NEXT ACTION
 
-After explicit user approval, change the Sites audience from `custom` to `public` and verify the live URL without a signed-in session. In parallel, complete Batch 2 correctness: make the capability-request payload the source of truth for the displayed/enforced scope and constrain `retry_payment` under an explicit pre-authorization policy.
+After explicit user approval, change the Sites audience from `custom` to `public`. Then deploy Checkpoint 11, verify the live URL without a signed-in session, and repeat the native 4 → 5 → 4 path. Next product batch: make the investigation state truthful and drive the full judge path from natural-language agent calls rather than the deterministic replay.
