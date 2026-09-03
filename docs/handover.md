@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 1 — project controls established.** The repository was empty at intake. Sloth is the working name and the product wrapper is a fictional SaaS payment-operations console.
+**Checkpoint 2 — runnable demo scaffold complete.** The repository was empty at intake. Sloth is the working name and the product wrapper is a fictional SaaS payment-operations console.
 
 ## Locked decisions
 
@@ -15,13 +15,17 @@
 
 - Repository cloned successfully from `https://github.com/emmaGH1/sloth.git`.
 - Repository had no commits or files on `main`.
-- No app or automated checks exist yet.
+- Static application created: `index.html`, `styles.css`, and `app.js`.
+- The page uses `document.modelContext.registerTool` (with a legacy `navigator.modelContext` fallback) when available. Four safe tools register on page load, while the refund tool is registered only after a grant and removed with `AbortController.abort()`.
+- The visual fallback mirrors the same scope-enforcement logic and produces a structured `SCOPE_VIOLATION` response.
+- Scope validation is isolated in `scope.js` and covered by `node --test tests/scope.test.mjs` for the approved, unapproved, and over-limit cases.
 
 ## Risks / open items
 
-- The exact public WebMCP registration API and browser support must be confirmed against the supplied test environments before claiming native interoperability.
+- Native browser testing remains required: WebMCP is a preview API and may require an enabled flag, origin trial, or browser extension. The app degrades visibly and safely if unavailable.
+- Automated browser control could not load the local server because its localhost client is blocked in this environment. The local server itself returned HTTP 200; repeat browser verification directly in the user’s Chrome/ChatGPT environment.
 - The GitHub remote reported `origin/main [gone]` on clone because the remote was empty; pushing will require network access and repository permissions.
 
 ## NEXT ACTION
 
-Scaffold the smallest polished client app and implement the full in-console capability-negotiation state machine before adding native WebMCP registration.
+Run `node --test tests/scope.test.mjs`, then serve locally over HTTP and run the README judge path in a WebMCP-enabled Chrome or ChatGPT Site Tools environment. Inspect the tool inventory before and after approval/revocation, then record exact browser results here.
