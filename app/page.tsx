@@ -17,6 +17,13 @@ type ModelContext = {
 type LogItem = { time: string; message: string };
 type CapabilityRequest = { capability: string; scope: { transactions: string[]; maxAmount: number }; reason: string };
 type Grant = CapabilityRequest["scope"];
+type Findings = {
+  issuesReviewed: number | null;
+  duplicatesConfirmed: number | null;
+  retriesResolved: number | null;
+  inspectedDuplicateIds: string[];
+  retriedIds: string[];
+};
 
 const baselineTools = [
   { name: "inspect_issues", label: "Read-only" },
@@ -49,7 +56,7 @@ export default function Home() {
   const [activeGrant, setActiveGrant] = useState<Grant | null>(null);
   const [toolResult, setToolResult] = useState<Record<string, unknown> | null>(null);
   const [logs, setLogs] = useState<LogItem[]>([{ time: "09:41:02", message: "Run is waiting for your intent." }]);
-  const [findings, setFindings] = useState(createEmptyFindings);
+  const [findings, setFindings] = useState<Findings>(createEmptyFindings);
   const investigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const addLog = useCallback((message: string) => {
@@ -127,7 +134,7 @@ export default function Home() {
           },
           async execute(input) {
             const response = validateCapabilityRequest(input);
-            if (!response.ok) {
+            if (!response.ok || !response.request) {
               addLog("Native agent submitted an invalid authority request; no capability was exposed.");
               return JSON.stringify(response);
             }
@@ -212,7 +219,7 @@ export default function Home() {
       setFindings(afterIssues);
       addLog("Replay inspected today’s payment issues.");
       investigationTimer.current = setTimeout(() => {
-        const afterDuplicates = transactions.reduce((current: ReturnType<typeof createEmptyFindings>, transaction: { id: string; amount: number; customer: string }) => (
+        const afterDuplicates = transactions.reduce((current: Findings, transaction: { id: string; amount: number; customer: string }) => (
           applyInvestigationFinding(current, "inspect_transaction", transaction)
         ), afterIssues);
         setFindings(afterDuplicates);

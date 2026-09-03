@@ -2,36 +2,62 @@
 
 **Delegate outcomes, not unlimited access.**
 
-Sloth is a demo-first payment-operations console that shows an AI agent requesting only the authority it needs. It uses the browser WebMCP API when it is available:
+A payment-operations sandbox for the [WebMCP Challenge](https://webmcp.devpost.com/). An agent starts with four baseline tools, investigates, then asks for one temporary refund capability. The human can allow, adjust, or deny. Scope is enforced **inside the tool**, then the tool is removed.
 
-1. Four baseline tools are registered on load: two read-only tools, one tightly pre-authorized retry mutation, and one authority-request tool.
-2. `request_capability` must provide the exact transaction IDs, maximum amount, and reason shown to the human. `refund_scoped_transactions` does not exist until that request is approved.
-3. The refund tool enforces the approved transaction IDs and per-transaction limit, returning a structured `SCOPE_VIOLATION` error for anything else.
-4. Ending the run aborts the registration, removing the refund tool from the browser’s exposed surface.
+Not a production processor. No real funds, auth, or customer data. “Sloth” is a working name only.
 
-`retry_payment` is not presented as inherently safe: it accepts only failed payment IDs returned by the current inspection, is limited to one idempotent attempt, and returns `PREAUTHORIZED_POLICY_VIOLATION` for arbitrary IDs.
+## Live
 
-## Run locally
+- App: https://sloth-webmcp.vercel.app
+- Repo: https://github.com/emmaGH1/sloth.git (MIT)
+- Commit: `e5a974e`
 
-Install the locked dependencies and start the Sites development server, then open the printed local URL in a WebMCP-enabled browser:
+## Tools
 
-```powershell
-npm ci
-npm run dev
-```
+| Tool | When | Contract |
+| --- | --- | --- |
+| `inspect_issues` | Always | Read-only issue summary |
+| `inspect_transaction` | Always | Read-only lookup by ID |
+| `retry_payment` | Always, pre-authorized | Failed IDs only (`PAY-17` ok, `TX-48` → `PREAUTHORIZED_POLICY_VIOLATION`) |
+| `request_capability` | Always | Payload is the approval-card source of truth |
+| `refund_scoped_transactions` | After human grant | Immutable IDs + cap; else `SCOPE_VIOLATION`; unregistered on end |
 
-Create the production bundle with `npm run build`.
+Investigation counts stay `—` until the matching native call runs.
 
 ## Judge path
 
-Native WebMCP is the primary proof. In Chrome with WebMCP enabled, or in ChatGPT’s in-app browser, the agent should:
+Chrome 149+ with `chrome://flags/#enable-webmcp-testing`, or ChatGPT’s in-app browser. Header must read **Native tools online**.
 
-1. Discover the four baseline tools. `refund_scoped_transactions` must be absent.
-2. Call `inspect_issues`, `inspect_transaction`, and `retry_payment`. Investigation counts appear only after those calls.
-3. Call `request_capability` with the verified transaction IDs, maximum amount, and reason.
-4. Select **Allow this scope** (or reduce the cap with **Adjust**).
-5. Notice `refund_scoped_transactions` enter the Authority rail.
-6. An out-of-scope refund returns a machine-readable `SCOPE_VIOLATION`.
-7. In-scope refunds complete; **End run & revoke authority** removes the fifth tool.
+1. Confirm four tools. No refund tool. Rail `04`.
+2. `inspect_issues` → counts `14` / `03`.
+3. `retry_payment` `{ "id": "PAY-17" }` succeeds; `{ "id": "TX-48" }` is blocked.
+4. `request_capability`:
 
-If native WebMCP is unavailable, the header shows **Demo replay mode**. **Start delegated run** then replays the labelled fallback path. The in-console simulation must not be confused for native agent execution. The project is packaged for ChatGPT Sites hosting.
+```json
+{
+  "capability": "refund_scoped_transactions",
+  "scope": { "transactions": ["TX-48", "TX-72", "TX-184"], "maxAmount": 184 },
+  "reason": "Confirmed duplicate charges"
+}
+```
+
+5. **Adjust** to `$72` and confirm. Fifth tool appears. Rail `05`.
+6. Refund `{ "id": "TX-999", "amount": 220 }` → one `SCOPE_VIOLATION`.
+7. Refund TX-48 `$48` and TX-72 `$72`. Leave TX-184 untouched.
+8. **End run & revoke authority**. Tool count returns to four.
+
+If WebMCP is missing, the header shows **Demo replay mode**. **Start delegated run** is labelled fallback, not native proof.
+
+## Local
+
+```powershell
+npm ci
+npm test
+npm run dev
+```
+
+Node 22.13+. `npm run build` is the ChatGPT Sites / vinext bundle.
+
+## License
+
+MIT. Keep the in-product “S” mark; do not use the Pinterest-derived running-sloth image.
