@@ -2,55 +2,76 @@
 
 ## Status
 
-**Checkpoint 15 — polished status language deployed.** The repository includes an MIT license and is anonymously readable. `request_capability` now validates and preserves the exact transaction IDs, maximum amount, and reason rendered to the human; the approved copy becomes the immutable refund grant. `retry_payment` now enforces a named, inspected-failure pre-authorization policy. Sloth Sites version 5 is live publicly at `https://sloth-webmcp.theboyemma.chatgpt.site` with refined scenario and WebMCP status language.
+**Checkpoint 16 — session handoff prepared.** Sloth is publicly live at `https://sloth-webmcp.theboyemma.chatgpt.site`. The public GitHub repository is `https://github.com/emmaGH1/sloth.git` and includes an MIT license. The deployed application is Sites version 5 from source commit `a159a7e`; current `main` (`476ddb3`) only adds this handover record.
+
+## Product in one sentence
+
+**Delegate outcomes, not unlimited access.** A payment-operations agent begins with narrow baseline tools, asks for a precise temporary refund capability only when needed, is enforced by that grant, adapts to violations, and loses the capability at the end of the run.
 
 ## Locked decisions
 
-- Core line: **Delegate outcomes, not unlimited access.**
-- Demo path: intent → investigate safe issues → request narrowly scoped refund authority for three verified duplicates → human approves/adjusts/denies → dynamically expose the scoped tool → enforce scope with structured errors → agent adapts → revoke authority at completion.
-- Optimize for one flawless judge path. No auth, real payments, database, or multi-user system.
-- User reports both ChatGPT Site Tools/WebMCP and WebMCP-enabled Chrome are available for later verification.
+- Optimize one flawless judge path, not product breadth.
+- Keep the simple in-product “S” mark. The supplied running-sloth image was derived from a Pinterest reference and must not be shipped.
+- No authentication, real payments, customer data, database, or multi-user workflow.
+- “Sloth” is a hackathon working name only; do not claim trademark exclusivity.
+- Keep the existing ChatGPT Sites URL. Removing `theboyemma.chatgpt.site` requires a separate custom domain.
 
-## Current test state
+## Current implementation
 
-- Repository cloned successfully from `https://github.com/emmaGH1/sloth.git`.
-- Repository had no commits or files on `main`.
-- Static application created: `index.html`, `styles.css`, and `app.js`.
-- The page uses `document.modelContext.registerTool` (with a legacy `navigator.modelContext` fallback) when available. Four safe tools register on page load, while the refund tool is registered only after a grant and removed with `AbortController.abort()`.
-- The visual fallback mirrors the same scope-enforcement logic and produces a structured `SCOPE_VIOLATION` response.
-- Scope validation is isolated in `scope.js` and covered by `node --test tests/scope.test.mjs` for the approved, unapproved, and over-limit cases.
-- Verified locally: `node --check app.js`, `node --test tests/scope.test.mjs` (3 passing), whitespace diff check, and an HTTP 200 response from the local preview server.
-- Published commits on `main`: `a5746a5` (controls and handover) and `2628dcc` (full demo implementation).
-- Migrated the static prototype into a single-route React client app using the Sites starter runtime and `.openai/hosting.json`.
-- `npm test` passes all 3 scope-enforcement tests and `npm run build` produces the required `dist/server/index.js` bundle.
-- Added and verified a bespoke Sloth social-preview card with exact brand copy and host-derived Open Graph/X metadata.
-- Production deployment succeeded on ChatGPT Sites and was opened in the Codex browser panel.
-- Correctness fixes: rejected instructions are reported once with explicit violation reasons; empty batches, duplicate IDs, non-positive/non-numeric amounts, over-grant amounts, and refunds above the original charge are rejected.
-- Adjusted grants now execute only covered refunds and visibly defer transactions outside the human-approved cap instead of reporting a false full success.
-- Successful native WebMCP refund calls now update the visible outcome state as well as returning the structured result.
-- `npm test` now passes 12 focused request, retry-policy, scope, and planning tests; the Sites production build succeeds.
-- Live QA found and corrected a browser compatibility issue in the adjustment slider by binding the direct input event; the displayed and granted cap now follows pointer/keyboard changes.
-- Live Sites QA passed: a $72 adjusted grant exposes the temporary tool, returns one deduplicated structured rejection for `TX-999`, refunds only TX-48 and TX-72, defers TX-184, and removes the tool at run end.
-- Deny and replay paths passed on the deployed site; authority remained at four tools after denial and reset returned to idle.
-- The deployed page produced no browser warnings or errors during the full correctness matrix.
+- Four baseline WebMCP tools register on load: `inspect_issues`, `inspect_transaction`, `retry_payment`, and `request_capability`.
+- `retry_payment` is a constrained, idempotent pre-authorized mutation. `PAY-17` is accepted; arbitrary IDs such as `TX-48` return `PREAUTHORIZED_POLICY_VIOLATION`.
+- `request_capability` validates capability, verified transaction IDs, maximum amount, and reason. Its payload is the source of truth for the human approval card.
+- Approving a request dynamically registers `refund_scoped_transactions`. It enforces the immutable approved IDs and cap with structured `SCOPE_VIOLATION` errors.
+- Adjusting to $72 refunds TX-48 and TX-72 while deferring TX-184. Ending a run removes the temporary tool.
+- The header reads `Payment operations / controlled scenario` and presents a composed `WebMCP / Native tools online` status; it falls back to `Demo replay mode` when native WebMCP is unavailable.
 
-## Risks / open items
+## Verified state
 
-- WebMCP remains a preview API and requires the appropriate browser support or testing flag. The app degrades visibly and safely if unavailable.
-- Automated browser control could not load the local server because its localhost client is blocked in this environment. The local server itself returned HTTP 200; repeat browser verification directly in the user’s Chrome/ChatGPT environment.
-- Native Chrome verification passed end to end on 2026-09-03 with Google’s Model Context Tool Inspector: four safe tools were discovered, safe tools returned expected results, the authority request changed the page, approval dynamically exposed `refund_scoped_transactions`, an out-of-scope call returned `SCOPE_VIOLATION`, the adjusted $72 grant refunded two transactions and deferred one, and ending the run removed the temporary tool.
-- Anonymous Git access passed with credential helpers disabled: `git ls-remote https://github.com/emmaGH1/sloth.git HEAD` resolved the current public `main` state.
-- The capability request rejects unsupported capabilities, blank reasons, duplicate/unverified transaction IDs, and invalid limits before opening the authority UI.
-- The authority UI renders from the validated request payload; approval snapshots that payload into an active grant used by both the native tool description and enforcement function.
-- `retry_payment` now returns `PREAUTHORIZED_POLICY_VIOLATION` for arbitrary IDs and reports its failed-payments-only, one-attempt, idempotent policy on success.
-- WebMCP tool annotations now distinguish read-only inspection, policy-constrained mutation, authority request, and consequential refund execution.
-- Sites version 4 was built, packaged, saved from the pushed Checkpoint 11 source, and deployed successfully under the existing owner-only access policy.
-- The Sites access policy is now `public`; an unauthenticated HTTP check returned `200`, the Sloth page title, and page content.
-- The hero no longer shows a fabricated `09:41 WAT` timestamp. Its label is now `Payment operations / controlled scenario`; the header status is visually structured as `WebMCP` plus `Native tools online`, with a clear demo-mode fallback.
-- Sites version 5 was built, packaged, saved from the status-language source checkpoint, and deployed successfully to the existing public URL.
-- Preliminary brand review found the `Sloth` name already in use across software, AI, and finance products. The supplied running-sloth image was derived from a Pinterest reference and is rejected for the submission because its provenance and reuse rights are unclear. Keep the existing “S” mark and do not claim trademark exclusivity.
-- Native Chrome verification predates Checkpoint 11. Repeat the 4 → 5 → 4 Inspector path after the next Sites deployment, including one allowed retry (`PAY-17`) and one blocked retry (`TX-48`).
+- `npm test`: 12 passing request, retry-policy, scope, and planning tests (2026-09-03).
+- `npm run build`: passes (2026-09-03).
+- GitHub was tested anonymously with credentials disabled and is public.
+- The public Sites URL returned HTTP 200 without a signed-in session.
+- Earlier native Chrome Inspector QA passed the original 4 → 5 → 4 lifecycle, adjusted-grant behavior, denial, replay, and out-of-scope structured error.
+
+## Important open verification
+
+The current public release needs one fresh native WebMCP retest because its scope-request and retry-policy contracts changed after the earlier Inspector test.
+
+1. Open the public URL in Chrome with WebMCP Inspector enabled and confirm `WebMCP / Native tools online`.
+2. Confirm exactly four baseline tools exist.
+3. Call `inspect_issues`, then call `retry_payment` with `{ "id": "PAY-17" }` and verify success.
+4. Call `retry_payment` with `{ "id": "TX-48" }` and verify `PREAUTHORIZED_POLICY_VIOLATION`.
+5. Call `request_capability` with:
+
+   ```json
+   {
+     "capability": "refund_scoped_transactions",
+     "scope": {
+       "transactions": ["TX-48", "TX-72", "TX-184"],
+       "maxAmount": 184
+     },
+     "reason": "Confirmed duplicate charges"
+   }
+   ```
+
+6. Approve or adjust the request in the page; confirm the fifth tool appears and enforces the granted scope.
+7. Call the refund tool with `TX-999` to verify one `SCOPE_VIOLATION`; complete valid refunds; end the run and confirm the tool count returns to four.
+
+## Next product batch
+
+Make the investigation state truthful and agent-driven:
+
+- Hide completed investigation findings until their corresponding native tool calls occur; the idle screen currently exposes the finished counts too early.
+- Let natural-language agent tool calls advance the judge path, with deterministic replay clearly labelled as fallback rather than the primary proof.
+- Preserve the verified 4 → 5 → 4 lifecycle and do not begin a broad visual redesign before this behavior is real.
+
+## Operating rules
+
+- Read `AGENTS.md` and `docs/prd-lite.md` before changing product behavior.
+- Update this handover after every meaningful checkpoint; make a clear commit and push it.
+- Run `npm test` and `npm run build` after code changes.
+- When changing the public site, follow the Sites build/hosting workflow and deploy the exact committed source.
 
 ## NEXT ACTION
 
-Repeat the native 4 → 5 → 4 path on the public version, including one allowed retry (`PAY-17`) and one blocked retry (`TX-48`). Next product batch: make the investigation state truthful and drive the full judge path from natural-language agent calls rather than the deterministic replay.
+Run the public native WebMCP verification above. If it passes, implement the truthful, tool-driven investigation state as the next focused batch.
