@@ -29,6 +29,7 @@
 - Adjusted grants now execute only covered refunds and visibly defer transactions outside the human-approved cap instead of reporting a false full success.
 - Successful native WebMCP refund calls now update the visible outcome state as well as returning the structured result.
 - `npm test` now passes 8 focused scope/planning tests; the Sites production build succeeds.
+- Live QA found and corrected a browser compatibility issue in the adjustment slider by binding the direct input event; the displayed and granted cap now follows pointer/keyboard changes.
 
 ## Risks / open items
 
