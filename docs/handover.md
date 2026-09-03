@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 12 — truthful scope contract deployed privately.** The repository includes an MIT license and is anonymously readable. `request_capability` now validates and preserves the exact transaction IDs, maximum amount, and reason rendered to the human; the approved copy becomes the immutable refund grant. `retry_payment` now enforces a named, inspected-failure pre-authorization policy. Sloth Sites version 4 is live at `https://sloth-webmcp.theboyemma.chatgpt.site` with owner-only custom access; changing its audience to public is waiting on the user’s explicit approval of that persistent access-control change.
+**Checkpoint 13 — judge access verified.** The repository includes an MIT license and is anonymously readable. `request_capability` now validates and preserves the exact transaction IDs, maximum amount, and reason rendered to the human; the approved copy becomes the immutable refund grant. `retry_payment` now enforces a named, inspected-failure pre-authorization policy. Sloth Sites version 4 is live publicly at `https://sloth-webmcp.theboyemma.chatgpt.site`.
 
 ## Locked decisions
 
@@ -45,9 +45,10 @@
 - `retry_payment` now returns `PREAUTHORIZED_POLICY_VIOLATION` for arbitrary IDs and reports its failed-payments-only, one-attempt, idempotent policy on success.
 - WebMCP tool annotations now distinguish read-only inspection, policy-constrained mutation, authority request, and consequential refund execution.
 - Sites version 4 was built, packaged, saved from the pushed Checkpoint 11 source, and deployed successfully under the existing owner-only access policy.
+- The Sites access policy is now `public`; an unauthenticated HTTP check returned `200`, the Sloth page title, and page content.
 - Preliminary brand review found the `Sloth` name already in use across software, AI, and finance products. The supplied running-sloth image was derived from a Pinterest reference and is rejected for the submission because its provenance and reuse rights are unclear. Keep the existing “S” mark and do not claim trademark exclusivity.
 - Native Chrome verification predates Checkpoint 11. Repeat the 4 → 5 → 4 Inspector path after the next Sites deployment, including one allowed retry (`PAY-17`) and one blocked retry (`TX-48`).
 
 ## NEXT ACTION
 
-After explicit user approval, change the Sites audience from `custom` to `public`. Then deploy Checkpoint 11, verify the live URL without a signed-in session, and repeat the native 4 → 5 → 4 path. Next product batch: make the investigation state truthful and drive the full judge path from natural-language agent calls rather than the deterministic replay.
+Repeat the native 4 → 5 → 4 path on the public version, including one allowed retry (`PAY-17`) and one blocked retry (`TX-48`). Next product batch: make the investigation state truthful and drive the full judge path from natural-language agent calls rather than the deterministic replay.
