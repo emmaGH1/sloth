@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 7 — correctness pass deployed and live-verified.** Sloth Sites version 3 is live at `https://sloth-webmcp.theboyemma.chatgpt.site` with the scope-enforcement and adjusted-grant defects closed.
+**Checkpoint 8 — complete native WebMCP judge path verified.** Sloth Sites version 3 is live at `https://sloth-webmcp.theboyemma.chatgpt.site`; both the visual fallback and Chrome’s native WebMCP path now pass end to end.
 
 ## Locked decisions
 
@@ -36,10 +36,10 @@
 
 ## Risks / open items
 
-- Native browser testing remains required: WebMCP is a preview API and may require an enabled flag, origin trial, or browser extension. The app degrades visibly and safely if unavailable.
+- WebMCP remains a preview API and requires the appropriate browser support or testing flag. The app degrades visibly and safely if unavailable.
 - Automated browser control could not load the local server because its localhost client is blocked in this environment. The local server itself returned HTTP 200; repeat browser verification directly in the user’s Chrome/ChatGPT environment.
-- Native Chrome discovery passed on 2026-09-03 after enabling WebMCP and installing Google’s Model Context Tool Inspector. The deployed page reports `WebMCP ready`, and the Inspector displays Sloth’s four initial safe tools. Native invocation, dynamic refund-tool exposure, scope rejection, and removal remain to be verified.
+- Native Chrome verification passed end to end on 2026-09-03 with Google’s Model Context Tool Inspector: four safe tools were discovered, safe tools returned expected results, the authority request changed the page, approval dynamically exposed `refund_scoped_transactions`, an out-of-scope call returned `SCOPE_VIOLATION`, the adjusted $72 grant refunded two transactions and deferred one, and ending the run removed the temporary tool.
 
 ## NEXT ACTION
 
-Use the Inspector’s manual tool controls (no Gemini key required) to verify native invocation, dynamic refund-tool exposure, `SCOPE_VIOLATION`, successful scoped execution, and refund-tool removal. UI reveal and motion polish can begin after the complete native path is captured.
+Polish the judge-facing UI without changing the verified interaction contract, then prepare the short demo recording and submission copy around the proven native path.
