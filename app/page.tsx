@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { applyInvestigationFinding, confirmedTransactions as transactions, createEmptyFindings, defaultCapabilityRequest, issueSummary, planRefunds, retryPayment, retryablePayments, validateCapabilityRequest, validateRefund } from "../scope.js";
+import { applyInvestigationFinding, applyRefundSpend, confirmedTotalAmount, confirmedTransactions as transactions, createEmptyFindings, defaultCapabilityRequest, deriveGrant, GRANT_TTL_SECONDS, issueSummary, planRefunds, retryPayment, shouldConsumeGrant, summarizeRefundResult, validateCapabilityRequest, validateRefund } from "../scope.js";
 
 type Phase = "idle" | "investigating" | "request" | "granted" | "completed" | "closed" | "denied" | "expired";
 type ToolDefinition = {
@@ -15,8 +15,8 @@ type ModelContext = {
   registerTool(tool: ToolDefinition, options?: { signal?: AbortSignal }): Promise<unknown>;
 };
 type LogItem = { time: string; message: string };
-type CapabilityRequest = { capability: string; scope: { transactions: string[]; maxAmount: number; maxTotalAmount?: number }; reason: string };
-type Grant = CapabilityRequest["scope"];
+type CapabilityRequest = { capability: string; scope: { transactions: string[]; maxAmount: number; maxTotalAmount: number }; reason: string };
+type Grant = { transactions: string[]; maxAmount: number; maxTotalAmount: number; spentAmount: number };
 type Findings = {
   issuesReviewed: number | null;
   duplicatesConfirmed: number | null;
@@ -46,12 +46,18 @@ function padCount(value: number | null) {
   return value == null ? "—" : String(value).padStart(2, "0");
 }
 
+function formatTtl(seconds: number) {
+  const mm = String(Math.floor(Math.max(0, seconds) / 60)).padStart(2, "0");
+  const ss = String(Math.max(0, seconds) % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
 export default function Home() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [nativeStatus, setNativeStatus] = useState<"checking" | "ready" | "fallback">("checking");
-  const [maxAmount, setMaxAmount] = useState(184);
-  const [maxTotalAmount, setMaxTotalAmount] = useState(150);
-  const [ttlSeconds, setTtlSeconds] = useState(60);
+  const [maxAmount, setMaxAmount] = useState(defaultCapabilityRequest.scope.maxAmount);
+  const [maxTotalAmount, setMaxTotalAmount] = useState(defaultCapabilityRequest.scope.maxTotalAmount);
+  const [ttlSeconds, setTtlSeconds] = useState(GRANT_TTL_SECONDS);
   const [adjusting, setAdjusting] = useState(false);
   const [grantActive, setGrantActive] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<CapabilityRequest>(defaultCapabilityRequest);
@@ -60,10 +66,22 @@ export default function Home() {
   const [logs, setLogs] = useState<LogItem[]>([{ time: "09:41:02", message: "Run is waiting for your intent." }]);
   const [findings, setFindings] = useState<Findings>(createEmptyFindings);
   const investigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const phaseRef = useRef(phase);
+  const grantActiveRef = useRef(grantActive);
+  const activeGrantRef = useRef(activeGrant);
+  phaseRef.current = phase;
+  grantActiveRef.current = grantActive;
+  activeGrantRef.current = activeGrant;
 
   const addLog = useCallback((message: string) => {
     setLogs((current) => [...current, { time: clock(), message }]);
   }, []);
+
+  const consumeGrant = useCallback((message: string) => {
+    setGrantActive(false);
+    setPhase("completed");
+    addLog(message);
+  }, [addLog]);
 
   const recordNativeFinding = useCallback((toolName: string, payload: object, message: string) => {
     setFindings((current) => applyInvestigationFinding(current, toolName, payload));
@@ -120,22 +138,25 @@ export default function Home() {
           annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
           inputSchema: {
             type: "object",
+            additionalProperties: false,
             properties: {
               capability: { type: "string", enum: ["refund_scoped_transactions"] },
               scope: {
                 type: "object",
+                additionalProperties: false,
                 properties: {
                   transactions: { type: "array", minItems: 1, items: { type: "string" } },
-                  maxAmount: { type: "number", exclusiveMinimum: 0 }
+                  maxAmount: { type: "number", exclusiveMinimum: 0 },
+                  maxTotalAmount: { type: "number", exclusiveMinimum: 0 }
                 },
-                required: ["transactions", "maxAmount"]
+                required: ["transactions", "maxAmount", "maxTotalAmount"]
               },
               reason: { type: "string", minLength: 1 }
             },
             required: ["capability", "scope", "reason"]
           },
           async execute(input) {
-            if (phase === "denied") {
+            if (phaseRef.current === "denied") {
               addLog("Native agent re-requested authority after operator denial; blocked by DO_NOT_RETRY policy.");
               return JSON.stringify({
                 ok: false,
@@ -151,9 +172,9 @@ export default function Home() {
             }
             setPendingRequest(response.request);
             setMaxAmount(response.request.scope.maxAmount);
-            setMaxTotalAmount(response.request.scope.maxAmount <= 72 ? 150 : 304);
+            setMaxTotalAmount(response.request.scope.maxTotalAmount);
             setPhase("request");
-            addLog(`Native agent requested ${response.request.capability} for ${response.request.scope.transactions.length} verified transactions, up to $${response.request.scope.maxAmount} each.`);
+            addLog(`Native agent requested ${response.request.capability} for ${response.request.scope.transactions.length} verified transactions, up to $${response.request.scope.maxAmount} each and $${response.request.scope.maxTotalAmount} aggregate.`);
             return JSON.stringify({ ok: true, status: "human_authorization_required", request: response.request });
           }
         }
@@ -179,25 +200,36 @@ export default function Home() {
       try {
         await context.registerTool({
           name: "refund_scoped_transactions",
-          description: `Refund only ${activeGrant.transactions.join(", ")}, up to $${activeGrant.maxAmount} per transaction. Return SCOPE_VIOLATION for any other ID or higher amount.`,
+          description: `Refund only ${activeGrant.transactions.join(", ")}, up to $${activeGrant.maxAmount} per transaction and $${activeGrant.maxTotalAmount} aggregate. Return SCOPE_VIOLATION for any other ID, higher amount, or remaining-budget breach.`,
           annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
           inputSchema: {
             type: "object",
+            additionalProperties: false,
             properties: {
               transactions: {
                 type: "array",
                 description: "Refund instructions constrained by the active human grant.",
                 minItems: 1,
-                items: { type: "object", properties: { id: { type: "string" }, amount: { type: "number", exclusiveMinimum: 0 } }, required: ["id", "amount"] }
+                items: { type: "object", additionalProperties: false, properties: { id: { type: "string" }, amount: { type: "number", exclusiveMinimum: 0 } }, required: ["id", "amount"] }
               }
             },
             required: ["transactions"]
           },
           async execute(input) {
-            const response = validateRefund(input, activeGrant);
+            const grant = activeGrantRef.current;
+            if (!grant || !grantActiveRef.current) {
+              return JSON.stringify({ ok: false, error: { code: "CAPABILITY_UNAVAILABLE", message: "Refund capability is not registered." } });
+            }
+            const response = validateRefund(input, grant);
             setToolResult(response);
-            if (response.ok) setPhase("completed");
-            addLog(response.ok ? "Native WebMCP tool completed an in-scope refund call." : "Native WebMCP blocked an out-of-scope refund call with SCOPE_VIOLATION.");
+            if (shouldConsumeGrant(response) && "refunds" in response && response.refunds) {
+              const spent = applyRefundSpend(grant, response.refunds);
+              activeGrantRef.current = spent;
+              setActiveGrant(spent);
+              consumeGrant("Native WebMCP tool completed an in-scope refund call. CAPABILITY_CONSUMED: single-use refund capability removed (05 → 04).");
+            } else {
+              addLog(`Native WebMCP blocked an out-of-scope refund call. ${summarizeRefundResult(response)}`);
+            }
             return JSON.stringify(response);
           }
         }, { signal: controller.signal });
@@ -207,7 +239,7 @@ export default function Home() {
     };
     void register();
     return () => controller.abort();
-  }, [activeGrant, addLog, grantActive]);
+  }, [activeGrant, addLog, consumeGrant, grantActive]);
 
   useEffect(() => () => {
     if (investigationTimer.current) clearTimeout(investigationTimer.current);
@@ -216,19 +248,17 @@ export default function Home() {
   useEffect(() => {
     if (!grantActive || phase !== "granted") return;
     const interval = setInterval(() => {
-      setTtlSeconds((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setGrantActive(false);
-          setPhase("expired");
-          addLog("CAPABILITY_EXPIRED: 60-second grant TTL elapsed; temporary refund capability auto-revoked by policy.");
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTtlSeconds((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, [addLog, grantActive, phase]);
+  }, [grantActive, phase]);
+
+  useEffect(() => {
+    if (phase !== "granted" || !grantActive || ttlSeconds !== 0) return;
+    setGrantActive(false);
+    setPhase("expired");
+    addLog("CAPABILITY_EXPIRED: grant TTL elapsed; temporary refund capability auto-revoked.");
+  }, [addLog, grantActive, phase, ttlSeconds]);
 
   function startDemoReplay() {
     if (investigationTimer.current) clearTimeout(investigationTimer.current);
@@ -236,8 +266,8 @@ export default function Home() {
     setToolResult(null);
     setPendingRequest(defaultCapabilityRequest);
     setMaxAmount(defaultCapabilityRequest.scope.maxAmount);
-    setMaxTotalAmount(150);
-    setTtlSeconds(60);
+    setMaxTotalAmount(defaultCapabilityRequest.scope.maxTotalAmount);
+    setTtlSeconds(GRANT_TTL_SECONDS);
     setActiveGrant(null);
     setGrantActive(false);
     setFindings(createEmptyFindings());
@@ -256,14 +286,12 @@ export default function Home() {
         setFindings(afterDuplicates);
         addLog("Replay confirmed three duplicate charges.");
         investigationTimer.current = setTimeout(() => {
-          const afterRetries = retryablePayments.reduce((current, id) => (
-            applyInvestigationFinding(current, "retry_payment", { ok: true, id })
-          ), afterDuplicates);
+          const afterRetries = applyInvestigationFinding(afterDuplicates, "retry_payment", retryPayment({ id: "PAY-17" }));
           setFindings(afterRetries);
-          addLog("Replay resolved pre-authorized retries.");
+          addLog("Replay resolved a pre-authorized retry (PAY-17).");
           setPhase("request");
           addLog("Inspection confirmed three duplicate charges. No refund capability is available.");
-          addLog(`Sloth requested narrow refund authority for ${defaultCapabilityRequest.scope.transactions.join(", ")}, up to $${defaultCapabilityRequest.scope.maxAmount} each.`);
+          addLog(`Sloth requested narrow refund authority for ${defaultCapabilityRequest.scope.transactions.join(", ")}, up to $${defaultCapabilityRequest.scope.maxAmount} each and $${defaultCapabilityRequest.scope.maxTotalAmount} aggregate.`);
         }, 450);
       }, 450);
     }, 350);
@@ -271,13 +299,12 @@ export default function Home() {
 
   function grantScope() {
     setAdjusting(false);
-    const totalCap = maxAmount <= 72 ? 150 : 304;
-    setMaxTotalAmount(totalCap);
-    setActiveGrant({ transactions: [...pendingRequest.scope.transactions], maxAmount, maxTotalAmount: totalCap });
+    const grant = deriveGrant(pendingRequest, { maxAmount, maxTotalAmount });
+    setActiveGrant(grant);
     setGrantActive(true);
-    setTtlSeconds(60);
+    setTtlSeconds(GRANT_TTL_SECONDS);
     setPhase("granted");
-    addLog(`Human granted refund authority: 3 transactions, ≤ $${maxAmount} each, ≤ $${totalCap} aggregate (60s TTL).`);
+    addLog(`Human granted refund authority: ${grant.transactions.length} transactions, ≤ $${grant.maxAmount} each, ≤ $${grant.maxTotalAmount} aggregate (${GRANT_TTL_SECONDS}s TTL).`);
   }
 
   function denyScope() {
@@ -286,32 +313,15 @@ export default function Home() {
   }
 
   function simulateExpiry() {
-    if (!grantActive) return;
+    if (!grantActive || phase !== "granted") return;
     setTtlSeconds(0);
-    setGrantActive(false);
-    setPhase("expired");
-    addLog("CAPABILITY_EXPIRED: Operator triggered immediate TTL expiration; temporary refund capability auto-revoked.");
   }
 
-  function testUnapprovedId() {
+  function runBoundaryTest(label: string, payload: { transactions: { id: string; amount: number }[] }) {
     if (!activeGrant) return;
-    const response = validateRefund({ transactions: [{ id: "TX-999", amount: 220 }] }, activeGrant);
+    const response = validateRefund(payload, activeGrant);
     setToolResult(response);
-    addLog("Boundary Test 1: Unapproved ID TX-999 was rejected with TRANSACTION_NOT_ALLOWED.");
-  }
-
-  function testUnitCapBreach() {
-    if (!activeGrant) return;
-    const response = validateRefund({ transactions: [{ id: "TX-48", amount: 184 }] }, activeGrant);
-    setToolResult(response);
-    addLog(`Boundary Test 2: Unit amount $184 was rejected exceeding approved limit ($${activeGrant.maxAmount}) with AMOUNT_OVER_GRANT.`);
-  }
-
-  function testAggregateCapBreach() {
-    if (!activeGrant) return;
-    const response = validateRefund({ transactions: [{ id: "TX-48", amount: 48 }, { id: "TX-72", amount: 72 }, { id: "TX-184", amount: 72 }] }, activeGrant);
-    setToolResult(response);
-    addLog(`Boundary Test 3: Batch sum ($192) was rejected exceeding aggregate limit ($${activeGrant.maxTotalAmount ?? 150}) with AGGREGATE_AMOUNT_OVER_GRANT.`);
+    addLog(`${label}: ${summarizeRefundResult(response)}`);
   }
 
   function executeRefunds() {
@@ -319,12 +329,13 @@ export default function Home() {
     const plan = planRefunds(activeGrant);
     const response = validateRefund({ transactions: plan.approved.map(({ id, amount }: { id: string; amount: number }) => ({ id, amount })) }, activeGrant);
     setToolResult(response);
-    if (response.ok) {
-      // Single-use capability auto-revocation:
-      setGrantActive(false);
-      setPhase("completed");
-      addLog(plan.deferred.length ? `Sloth refunded ${plan.approved.length} duplicates and left ${plan.deferred.length} untouched outside the adjusted cap.` : "Sloth refunded all three verified duplicates within the approved scope.");
-      addLog("CAPABILITY_CONSUMED: Single-use refund capability consumed upon execution; authority returned to baseline (05 → 04).");
+    if (shouldConsumeGrant(response) && "refunds" in response && response.refunds) {
+      setActiveGrant(applyRefundSpend(activeGrant, response.refunds));
+      consumeGrant(plan.deferred.length
+        ? `Sloth refunded ${plan.approved.length} duplicates and left ${plan.deferred.length} untouched outside the adjusted cap. CAPABILITY_CONSUMED: authority returned to baseline (05 → 04).`
+        : "Sloth refunded all verified duplicates within the approved scope. CAPABILITY_CONSUMED: authority returned to baseline (05 → 04).");
+    } else {
+      addLog(summarizeRefundResult(response));
     }
   }
 
@@ -341,8 +352,8 @@ export default function Home() {
     setPendingRequest(defaultCapabilityRequest);
     setActiveGrant(null);
     setMaxAmount(defaultCapabilityRequest.scope.maxAmount);
-    setMaxTotalAmount(150);
-    setTtlSeconds(60);
+    setMaxTotalAmount(defaultCapabilityRequest.scope.maxTotalAmount);
+    setTtlSeconds(GRANT_TTL_SECONDS);
     setAdjusting(false);
     setToolResult(null);
     setFindings(createEmptyFindings());
@@ -354,7 +365,6 @@ export default function Home() {
       schemaVersion: "1.0.0",
       auditRecordId: `audit-sloth-${Date.now()}`,
       generatedAt: new Date().toISOString(),
-      complianceStandard: "WebMCP Scoped Authority Audit v1",
       environment: {
         nativeWebMCP: nativeStatus === "ready",
         mode: nativeStatus === "ready" ? "native_model_context" : "simulated_console"
@@ -372,7 +382,7 @@ export default function Home() {
         status: phase === "denied" ? "DENIED" : phase === "expired" ? "EXPIRED_REVOKED" : activeGrant ? "GRANTED" : "PENDING",
         unitCapApproved: activeGrant?.maxAmount ?? null,
         aggregateCapEnforced: activeGrant?.maxTotalAmount ?? null,
-        ttlConfiguredSeconds: 60,
+        ttlConfiguredSeconds: GRANT_TTL_SECONDS,
         ttlRemainingSeconds: ttlSeconds
       },
       runtimeLifecycle: {
@@ -394,7 +404,7 @@ export default function Home() {
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
-    addLog("Compliance audit record exported to JSON.");
+    addLog("Run audit exported to JSON.");
   }
 
   const isRunning = phase !== "idle" && phase !== "closed" && phase !== "denied" && phase !== "expired";
@@ -422,6 +432,7 @@ export default function Home() {
   const refundedCount = Array.isArray(toolResult?.refunds) ? toolResult.refunds.length : 0;
   const deferredCount = Math.max(0, transactions.length - refundedCount);
   const requestedTransactions = transactions.filter(({ id }: { id: string }) => pendingRequest.scope.transactions.includes(id));
+  const aggregateSliderMax = Math.max(confirmedTotalAmount, pendingRequest.scope.maxTotalAmount, maxTotalAmount);
 
   return (
     <main className="shell">
@@ -432,9 +443,9 @@ export default function Home() {
           <span>SLOTH</span>
         </a>
         <ul className="nav-links">
-          <li><a href="#features">Architecture</a></li>
           <li><a href="#console">Operations</a></li>
           <li><a href="#enforcement">Enforcement</a></li>
+          <li><a href="#features">Architecture</a></li>
         </ul>
         <div className={`webmcp-indicator ${nativeStatus}`} aria-live="polite" aria-label={nativeStatus === "ready" ? "WebMCP native tools online" : nativeStatus === "fallback" ? "WebMCP simulation mode" : "Checking WebMCP connection"}>
           <span className="indicator-beacon" aria-hidden="true" />
@@ -456,12 +467,12 @@ export default function Home() {
             <div className="hero-actions">
               {phase === "idle" ? (
                 <button className="primary" onClick={startDemoReplay}>Launch Delegated Run <span aria-hidden="true">→</span></button>
-              ) : phase === "closed" || phase === "denied" ? (
+              ) : phase === "closed" || phase === "denied" || phase === "expired" ? (
                 <button className="primary" onClick={replay}>Re-arm Console <span aria-hidden="true">↻</span></button>
               ) : (
                 <a href="#console" className="primary">Console Active <span aria-hidden="true">↓</span></a>
               )}
-              <a href="#features" className="secondary">Explore Architecture <span aria-hidden="true">↓</span></a>
+              <a href="#console" className="secondary">Open console <span aria-hidden="true">↓</span></a>
             </div>
             {nativeStatus === "ready" ? (
               <p className="hero-note">Native tools are live. Connect your WebMCP agent or Inspector to interact.</p>
@@ -479,73 +490,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Section 2: Architecture & Core Features */}
-      <section className="section-fullscreen" id="features">
-        <div className="section-header">
-          <p className="eyebrow">Dynamic Capability Architecture</p>
-          <h2>Authority that scales with trust.</h2>
-          <p>Traditional architectures rely on dangerous permanent API keys or spam human approvals on every step. Sloth introduces a deterministic three-phase boundary: narrow by default, temporary when escalated, and enforced inside the tool execution handler.</p>
-        </div>
-        <div className="features-grid">
-          <article className="feature-card">
-            <div className="feature-top">
-              <span className="feature-layer">Phase 01 / Least Privilege</span>
-              <h3>Narrow Baseline Discovery</h3>
-              <p>The agent begins with read-only inspection tools and pre-authorized idempotent retries. Financial mutations do not exist in the browser context.</p>
-            </div>
-            <div className="feature-visual">
-              <div className="feature-tool-list">
-                <div className="feature-tool-row"><span className="feature-tool-name"><code>inspect_issues</code></span><span className="feature-tool-meta green">read-only</span></div>
-                <div className="feature-tool-row"><span className="feature-tool-name"><code>inspect_transaction</code></span><span className="feature-tool-meta green">read-only</span></div>
-                <div className="feature-tool-row"><span className="feature-tool-name"><code>retry_payment</code></span><span className="feature-tool-meta amber">pre-auth policy</span></div>
-                <div className="feature-tool-row"><span className="feature-tool-name"><code>request_capability</code></span><span className="feature-tool-meta">boundary hook</span></div>
-                <div className="feature-divider" />
-                <div className="feature-tool-row"><span className="feature-tool-name"><code>refund_scoped_transactions</code></span><span className="feature-tool-meta blocked">UNREGISTERED</span></div>
-              </div>
-            </div>
-            <div className="feature-badge active">● 04 Tools in WebMCP Registry</div>
-          </article>
-
-          <article className="feature-card">
-            <div className="feature-top">
-              <span className="feature-layer">Phase 02 / Hard Boundary</span>
-              <h3>Just-in-Time Authority Request</h3>
-              <p>When duplicate charges are confirmed, the agent halts at the boundary and calls <code>request_capability</code>. The operator approves or limits an immutable grant.</p>
-            </div>
-            <div className="feature-visual">
-              <pre className="feature-code-snippet">{`request_capability({
-  capability: "refund_scoped_transactions",
-  scope: {
-    transactions: ["TX-48", "TX-72"],
-    maxAmount: 72
-  },
-  reason: "Confirmed duplicate charges"
-})`}</pre>
-            </div>
-            <div className="feature-badge active">● Human Governed · Scope Locked</div>
-          </article>
-
-          <article className="feature-card">
-            <div className="feature-top">
-              <span className="feature-layer">Phase 03 / Deterministic Safety</span>
-              <h3>In-Tool Enforcement &amp; Expiry</h3>
-              <p>Scope constraints are checked inside the tool handler, returning structured violations. The capability disappears the moment the run closes.</p>
-            </div>
-            <div className="feature-visual">
-              <div className="feature-steps">
-                <div className="feature-step-row"><span>01</span><strong>Tool dynamically registered</strong></div>
-                <div className="feature-step-row alert"><span>02</span><strong>TX-999 ($220) → SCOPE_VIOLATION</strong></div>
-                <div className="feature-step-row success"><span>03</span><strong>TX-48, TX-72 refunded within grant</strong></div>
-                <div className="feature-divider" />
-                <div className="feature-step-row"><span>04</span><strong>Task complete → Tool unregistered</strong></div>
-              </div>
-            </div>
-            <div className="feature-badge active">● 4 → 5 → 4 Lifecycle Validated</div>
-          </article>
-        </div>
-      </section>
-
-      {/* Section 3: Operations Console — Investigation & Request */}
+      {/* Operations Console */}
       <section className="section-container" id="console">
         <div className="section-header">
           <p className="eyebrow">Interactive Operations Console</p>
@@ -588,7 +533,24 @@ export default function Home() {
               <h3>Agent requests refund authority</h3>
               <p className="request-copy">{pendingRequest.reason} <strong>{requestedTransactions.length} transactions · max ${maxAmount}/item · max ${maxTotalAmount} aggregate cap.</strong></p>
               <div className="transactions">{requestedTransactions.map(({ id, amount, customer }: { id: string; amount: number; customer: string }) => <span className="transaction" key={id}><b>{id}</b> · ${amount} · {customer}</span>)}</div>
-              {!adjusting ? <div className="request-actions"><button className="primary compact" onClick={grantScope}>Allow this scope</button><button className="secondary compact" onClick={() => setAdjusting(true)}>Adjust</button><button className="quiet compact" onClick={denyScope}>Deny</button></div> : <div className="adjuster"><label htmlFor="limit">Maximum refund per transaction <output>${maxAmount} (Aggregate cap: ${maxAmount <= 72 ? 150 : 304})</output></label><input id="limit" type="range" min="48" max="184" value={maxAmount} step="8" onInput={(event) => { const val = Number(event.currentTarget.value); setMaxAmount(val); setMaxTotalAmount(val <= 72 ? 150 : 304); }} /><div><button className="secondary compact" onClick={() => setAdjusting(false)}>Cancel</button><button className="primary compact" onClick={grantScope}>Confirm revised grant</button></div></div>}
+              {!adjusting ? (
+                <div className="request-actions">
+                  <button className="primary compact" onClick={grantScope}>Allow this scope</button>
+                  <button className="secondary compact" onClick={() => setAdjusting(true)}>Adjust</button>
+                  <button className="quiet compact" onClick={denyScope}>Deny</button>
+                </div>
+              ) : (
+                <div className="adjuster">
+                  <label htmlFor="limit">Maximum refund per transaction <output>${maxAmount}</output></label>
+                  <input id="limit" type="range" min="48" max="184" value={maxAmount} step="8" onInput={(event) => setMaxAmount(Number(event.currentTarget.value))} />
+                  <label htmlFor="aggregate">Aggregate refund cap <output>${maxTotalAmount}</output></label>
+                  <input id="aggregate" type="range" min="48" max={aggregateSliderMax} value={maxTotalAmount} step="2" onInput={(event) => setMaxTotalAmount(Number(event.currentTarget.value))} />
+                  <div>
+                    <button className="secondary compact" onClick={() => setAdjusting(false)}>Cancel</button>
+                    <button className="primary compact" onClick={grantScope}>Confirm revised grant</button>
+                  </div>
+                </div>
+              )}
             </div>}
 
             {/* Section 4: Runtime Enforcement & Boundary Testing */}
@@ -602,23 +564,23 @@ export default function Home() {
                     <code>refund_scoped_transactions</code>
                     <span className="grant-scope-text">Live · {activeGrant?.transactions.length ?? 0} tx · ≤ ${activeGrant?.maxAmount ?? maxAmount}/item · ≤ ${activeGrant?.maxTotalAmount ?? maxTotalAmount} aggregate</span>
                     <div className={`grant-ttl${ttlSeconds <= 15 ? " urgent" : ""}`}>
-                      <span>⏱ 00:{String(ttlSeconds).padStart(2, "0")}s TTL</span>
+                      <span>TTL {formatTtl(ttlSeconds)}</span>
                       {phase === "granted" && (
-                        <button className="quiet compact ttl-fastforward" onClick={simulateExpiry} title="Simulate 60s TTL expiry for testing">Fast-forward ⚡</button>
+                        <button className="quiet compact ttl-fastforward" onClick={simulateExpiry} title="Simulate grant expiry">Fast-forward</button>
                       )}
                     </div>
                   </div>
                   {phase === "granted" && (
                     <>
-                      <div className="execution-actions" style={{ marginTop: "16px" }}>
-                        <button className="primary compact" onClick={executeRefunds}>Execute verified refunds (Single-use)</button>
+                      <div className="execution-actions">
+                        <button className="primary compact" onClick={executeRefunds}>Execute verified refunds (single-use)</button>
                       </div>
                       <div className="test-suite-box">
-                        <div className="test-suite-label">Boundary Verification Test Suite (In-tool safety checks)</div>
+                        <div className="test-suite-label">Boundary verification (in-tool checks against the active grant)</div>
                         <div className="test-suite-actions">
-                          <button className="test-suite-btn" onClick={testUnapprovedId}>1. Test Unapproved ID (TX-999)</button>
-                          <button className="test-suite-btn" onClick={testUnitCapBreach}>2. Test Unit Cap Breach ($184)</button>
-                          <button className="test-suite-btn" onClick={testAggregateCapBreach}>3. Test Aggregate Cap Breach ($192)</button>
+                          <button className="test-suite-btn" onClick={() => runBoundaryTest("Boundary test 1 (TX-999 $220)", { transactions: [{ id: "TX-999", amount: 220 }] })}>1. Unapproved ID (TX-999)</button>
+                          <button className="test-suite-btn" onClick={() => runBoundaryTest("Boundary test 2 (TX-48 $184)", { transactions: [{ id: "TX-48", amount: 184 }] })}>2. Unit amount $184</button>
+                          <button className="test-suite-btn" onClick={() => runBoundaryTest("Boundary test 3 (batch $192)", { transactions: [{ id: "TX-48", amount: 48 }, { id: "TX-72", amount: 72 }, { id: "TX-184", amount: 72 }] })}>3. Batch $192</button>
                         </div>
                       </div>
                     </>
@@ -627,7 +589,7 @@ export default function Home() {
                 </div>
               ) : phase === "closed" || phase === "denied" || phase === "expired" ? null : (
                 <div className="standby-card">
-                  <p>Awaiting capability grant: No financial mutation capability is currently registered in the runtime. Once an authority request is approved above, runtime boundary testing, live 60s TTL countdown, and execution controls will activate here.</p>
+                  <p>Awaiting capability grant: no financial mutation capability is registered. Approve a request above to activate boundary testing, the TTL countdown, and execution controls.</p>
                 </div>
               )}
 
@@ -642,7 +604,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="completion-actions">
-                    <button className="secondary compact" onClick={exportAuditLedger}>Export Audit Ledger (.json)</button>
+                    <button className="secondary compact" onClick={exportAuditLedger}>Export audit (.json)</button>
                     <button className="quiet compact" onClick={endRun}>End run &amp; revoke authority</button>
                   </div>
                 </div>
@@ -651,15 +613,15 @@ export default function Home() {
               {phase === "expired" && (
                 <div className="completion expired-card">
                   <div>
-                    <span className="check warning">⏱</span>
+                    <span className="check warning">!</span>
                     <div>
                       <p className="eyebrow">Automatic Safety Boundary</p>
                       <h3>Temporary authority expired &amp; revoked.</h3>
-                      <p>The 60-second grant time-to-live elapsed. The refund capability was automatically unregistered from WebMCP without requiring human intervention.</p>
+                      <p>The grant time-to-live elapsed. The refund capability was unregistered from WebMCP without further human action.</p>
                     </div>
                   </div>
                   <div className="completion-actions">
-                    <button className="secondary compact" onClick={exportAuditLedger}>Export Audit Ledger (.json)</button>
+                    <button className="secondary compact" onClick={exportAuditLedger}>Export audit (.json)</button>
                     <button className="primary compact" onClick={replay}>Re-arm Console</button>
                   </div>
                 </div>
@@ -676,7 +638,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="completion-actions">
-                    <button className="secondary compact" onClick={exportAuditLedger}>Export Audit Ledger (.json)</button>
+                    <button className="secondary compact" onClick={exportAuditLedger}>Export audit (.json)</button>
                     <button className="quiet compact" onClick={replay}>Re-arm Console</button>
                   </div>
                 </div>
@@ -685,7 +647,7 @@ export default function Home() {
               <div className="activity-wrap">
                 <div className="activity-header-bar">
                   <div className="section-label"><span>Live</span> Decision audit stream</div>
-                  <button className="secondary compact" onClick={exportAuditLedger}>Export Audit Ledger (.json) ⤓</button>
+                  <button className="secondary compact" onClick={exportAuditLedger}>Export audit (.json)</button>
                 </div>
                 <ol className="activity" aria-live="polite">{logs.map((item, index) => <li key={`${item.time}-${index}`}><time>{item.time}</time><span>{item.message}</span></li>)}</ol>
               </div>
@@ -694,7 +656,73 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Section 5: Closing CTA */}
+      <section className="section-container" id="features">
+        <div className="section-header">
+          <p className="eyebrow">Dynamic Capability Architecture</p>
+          <h2>Authority that scales with trust.</h2>
+          <p>Narrow by default, temporary when escalated, and enforced inside the tool handler — not only in the UI.</p>
+        </div>
+        <div className="features-grid">
+          <article className="feature-card">
+            <div className="feature-top">
+              <span className="feature-layer">Phase 01 / Least Privilege</span>
+              <h3>Narrow Baseline Discovery</h3>
+              <p>The agent begins with read-only inspection tools and pre-authorized idempotent retries. Financial mutations do not exist in the browser context.</p>
+            </div>
+            <div className="feature-visual">
+              <div className="feature-tool-list">
+                <div className="feature-tool-row"><span className="feature-tool-name"><code>inspect_issues</code></span><span className="feature-tool-meta green">read-only</span></div>
+                <div className="feature-tool-row"><span className="feature-tool-name"><code>inspect_transaction</code></span><span className="feature-tool-meta green">read-only</span></div>
+                <div className="feature-tool-row"><span className="feature-tool-name"><code>retry_payment</code></span><span className="feature-tool-meta amber">pre-auth policy</span></div>
+                <div className="feature-tool-row"><span className="feature-tool-name"><code>request_capability</code></span><span className="feature-tool-meta">boundary hook</span></div>
+                <div className="feature-divider" />
+                <div className="feature-tool-row"><span className="feature-tool-name"><code>refund_scoped_transactions</code></span><span className="feature-tool-meta blocked">UNREGISTERED</span></div>
+              </div>
+            </div>
+            <div className="feature-badge active">● 04 Tools in WebMCP Registry</div>
+          </article>
+
+          <article className="feature-card">
+            <div className="feature-top">
+              <span className="feature-layer">Phase 02 / Hard Boundary</span>
+              <h3>Just-in-Time Authority Request</h3>
+              <p>When duplicate charges are confirmed, the agent halts at the boundary and calls <code>request_capability</code>. The operator approves or limits an immutable grant.</p>
+            </div>
+            <div className="feature-visual">
+              <pre className="feature-code-snippet">{`request_capability({
+  capability: "refund_scoped_transactions",
+  scope: {
+    transactions: ["TX-48", "TX-72", "TX-184"],
+    maxAmount: 184,
+    maxTotalAmount: 304
+  },
+  reason: "Confirmed duplicate charges"
+})`}</pre>
+            </div>
+            <div className="feature-badge active">● Human Governed · Scope Locked</div>
+          </article>
+
+          <article className="feature-card">
+            <div className="feature-top">
+              <span className="feature-layer">Phase 03 / Deterministic Safety</span>
+              <h3>In-Tool Enforcement &amp; Expiry</h3>
+              <p>Scope constraints are checked inside the tool handler, returning structured violations. The capability disappears when consumed, denied, or expired.</p>
+            </div>
+            <div className="feature-visual">
+              <div className="feature-steps">
+                <div className="feature-step-row"><span>01</span><strong>Tool dynamically registered</strong></div>
+                <div className="feature-step-row alert"><span>02</span><strong>TX-999 ($220) → SCOPE_VIOLATION</strong></div>
+                <div className="feature-step-row success"><span>03</span><strong>TX-48, TX-72 refunded within grant</strong></div>
+                <div className="feature-divider" />
+                <div className="feature-step-row"><span>04</span><strong>Consumed or expired → unregistered</strong></div>
+              </div>
+            </div>
+            <div className="feature-badge active">● 4 → 5 → 4 Lifecycle</div>
+          </article>
+        </div>
+      </section>
+
+      {/* Closing CTA */}
       <section className="cta-section" id="cta">
         <div className="cta-grid">
           <div className="cta-content">
