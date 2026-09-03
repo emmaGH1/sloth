@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 14 — status language refined.** The repository includes an MIT license and is anonymously readable. `request_capability` now validates and preserves the exact transaction IDs, maximum amount, and reason rendered to the human; the approved copy becomes the immutable refund grant. `retry_payment` now enforces a named, inspected-failure pre-authorization policy. Sloth Sites version 4 is live publicly at `https://sloth-webmcp.theboyemma.chatgpt.site`; the next deploy changes the hero to a controlled scenario and presents native WebMCP availability as a composed status indicator rather than debug copy.
+**Checkpoint 15 — polished status language deployed.** The repository includes an MIT license and is anonymously readable. `request_capability` now validates and preserves the exact transaction IDs, maximum amount, and reason rendered to the human; the approved copy becomes the immutable refund grant. `retry_payment` now enforces a named, inspected-failure pre-authorization policy. Sloth Sites version 5 is live publicly at `https://sloth-webmcp.theboyemma.chatgpt.site` with refined scenario and WebMCP status language.
 
 ## Locked decisions
 
@@ -47,6 +47,7 @@
 - Sites version 4 was built, packaged, saved from the pushed Checkpoint 11 source, and deployed successfully under the existing owner-only access policy.
 - The Sites access policy is now `public`; an unauthenticated HTTP check returned `200`, the Sloth page title, and page content.
 - The hero no longer shows a fabricated `09:41 WAT` timestamp. Its label is now `Payment operations / controlled scenario`; the header status is visually structured as `WebMCP` plus `Native tools online`, with a clear demo-mode fallback.
+- Sites version 5 was built, packaged, saved from the status-language source checkpoint, and deployed successfully to the existing public URL.
 - Preliminary brand review found the `Sloth` name already in use across software, AI, and finance products. The supplied running-sloth image was derived from a Pinterest reference and is rejected for the submission because its provenance and reuse rights are unclear. Keep the existing “S” mark and do not claim trademark exclusivity.
 - Native Chrome verification predates Checkpoint 11. Repeat the 4 → 5 → 4 Inspector path after the next Sites deployment, including one allowed retry (`PAY-17`) and one blocked retry (`TX-48`).
 
