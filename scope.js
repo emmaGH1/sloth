@@ -6,6 +6,51 @@ export const confirmedTransactions = [
 
 export const retryablePayments = ["PAY-17", "PAY-23", "PAY-31", "PAY-42", "PAY-56", "PAY-63", "PAY-77", "PAY-88"];
 
+export const issueSummary = {
+  issuesReviewed: 14,
+  duplicateChargesConfirmed: confirmedTransactions.length,
+  retryablePayments: [...retryablePayments]
+};
+
+export function createEmptyFindings() {
+  return {
+    issuesReviewed: null,
+    duplicatesConfirmed: null,
+    retriesResolved: null,
+    inspectedDuplicateIds: [],
+    retriedIds: []
+  };
+}
+
+export function applyInvestigationFinding(findings, toolName, payload) {
+  const next = {
+    issuesReviewed: findings.issuesReviewed,
+    duplicatesConfirmed: findings.duplicatesConfirmed,
+    retriesResolved: findings.retriesResolved,
+    inspectedDuplicateIds: [...(findings.inspectedDuplicateIds || [])],
+    retriedIds: [...(findings.retriedIds || [])]
+  };
+
+  if (toolName === "inspect_issues" && payload && typeof payload.issuesReviewed === "number") {
+    next.issuesReviewed = payload.issuesReviewed;
+    if (typeof payload.duplicateChargesConfirmed === "number") {
+      next.duplicatesConfirmed = Math.max(next.duplicatesConfirmed || 0, payload.duplicateChargesConfirmed);
+    }
+  }
+
+  if (toolName === "inspect_transaction" && payload?.id && !payload.error && confirmedTransactions.some((transaction) => transaction.id === payload.id)) {
+    if (!next.inspectedDuplicateIds.includes(payload.id)) next.inspectedDuplicateIds.push(payload.id);
+    next.duplicatesConfirmed = Math.max(next.duplicatesConfirmed || 0, next.inspectedDuplicateIds.length);
+  }
+
+  if (toolName === "retry_payment" && payload?.ok && typeof payload.id === "string") {
+    if (!next.retriedIds.includes(payload.id)) next.retriedIds.push(payload.id);
+    next.retriesResolved = next.retriedIds.length;
+  }
+
+  return next;
+}
+
 export const defaultCapabilityRequest = {
   capability: "refund_scoped_transactions",
   scope: {

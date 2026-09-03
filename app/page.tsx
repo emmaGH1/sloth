@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { confirmedTransactions as transactions, defaultCapabilityRequest, planRefunds, retryPayment, validateCapabilityRequest, validateRefund } from "../scope.js";
+import { applyInvestigationFinding, confirmedTransactions as transactions, createEmptyFindings, defaultCapabilityRequest, issueSummary, planRefunds, retryPayment, retryablePayments, validateCapabilityRequest, validateRefund } from "../scope.js";
 
 type Phase = "idle" | "investigating" | "request" | "granted" | "completed" | "closed" | "denied";
 type ToolDefinition = {
@@ -35,6 +35,10 @@ function clock() {
   return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date());
 }
 
+function padCount(value: number | null) {
+  return value == null ? "—" : String(value).padStart(2, "0");
+}
+
 export default function Home() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [nativeStatus, setNativeStatus] = useState<"checking" | "ready" | "fallback">("checking");
@@ -45,11 +49,18 @@ export default function Home() {
   const [activeGrant, setActiveGrant] = useState<Grant | null>(null);
   const [toolResult, setToolResult] = useState<Record<string, unknown> | null>(null);
   const [logs, setLogs] = useState<LogItem[]>([{ time: "09:41:02", message: "Run is waiting for your intent." }]);
+  const [findings, setFindings] = useState(createEmptyFindings);
   const investigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const addLog = useCallback((message: string) => {
     setLogs((current) => [...current, { time: clock(), message }]);
   }, []);
+
+  const recordNativeFinding = useCallback((toolName: string, payload: object, message: string) => {
+    setFindings((current) => applyInvestigationFinding(current, toolName, payload));
+    setPhase((current) => current === "idle" ? "investigating" : current);
+    addLog(message);
+  }, [addLog]);
 
   useEffect(() => {
     const context = getModelContext();
@@ -65,7 +76,10 @@ export default function Home() {
           name: "inspect_issues",
           description: "Read today’s payment issue summary without making financial changes.",
           annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-          async execute() { return JSON.stringify({ issuesReviewed: 14, duplicateChargesConfirmed: 3, retryablePayments: ["PAY-17", "PAY-23", "PAY-31", "PAY-42", "PAY-56", "PAY-63", "PAY-77", "PAY-88"] }); }
+          async execute() {
+            recordNativeFinding("inspect_issues", issueSummary, "Native agent inspected today’s payment issues.");
+            return JSON.stringify(issueSummary);
+          }
         },
         {
           name: "inspect_transaction",
@@ -74,6 +88,8 @@ export default function Home() {
           inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
           async execute(input) {
             const match = transactions.find((transaction: { id: string }) => transaction.id === input.id);
+            if (match) recordNativeFinding("inspect_transaction", match, `Native agent inspected ${match.id}.`);
+            else addLog(`Native agent looked up unknown transaction ${String(input.id)}.`);
             return JSON.stringify(match || { error: { code: "NOT_FOUND", id: input.id } });
           }
         },
@@ -82,7 +98,12 @@ export default function Home() {
           description: "Retry only a failed payment named by today’s inspection, under an idempotent one-attempt pre-authorization policy. This tool cannot refund or change charges.",
           annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
           inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-          async execute(input) { return JSON.stringify(retryPayment(input)); }
+          async execute(input) {
+            const response = retryPayment(input);
+            if (response.ok) recordNativeFinding("retry_payment", response, `Native agent retried ${response.id} under pre-authorized policy.`);
+            else addLog(`Native retry of ${String(input.id)} was blocked with PREAUTHORIZED_POLICY_VIOLATION.`);
+            return JSON.stringify(response);
+          }
         },
         {
           name: "request_capability",
@@ -128,7 +149,7 @@ export default function Home() {
     };
     void register();
     return () => controller.abort();
-  }, [addLog]);
+  }, [addLog, recordNativeFinding]);
 
   useEffect(() => {
     if (!grantActive || !activeGrant) return;
@@ -173,18 +194,41 @@ export default function Home() {
     if (investigationTimer.current) clearTimeout(investigationTimer.current);
   }, []);
 
-  function startRun() {
+  function startDemoReplay() {
+    if (investigationTimer.current) clearTimeout(investigationTimer.current);
     setPhase("investigating");
     setToolResult(null);
     setPendingRequest(defaultCapabilityRequest);
     setMaxAmount(defaultCapabilityRequest.scope.maxAmount);
     setActiveGrant(null);
+    setGrantActive(false);
+    setFindings(createEmptyFindings());
+    addLog(nativeStatus === "ready"
+      ? "Demo replay started. This labelled fallback is not native agent proof."
+      : "Demo replay started because native WebMCP is unavailable.");
     addLog("Intent accepted. Sloth begins with four baseline capabilities and no refund authority.");
     investigationTimer.current = setTimeout(() => {
-      setPhase("request");
-      addLog("Inspection confirmed three duplicate charges. No refund capability is available.");
-      addLog(`Sloth requested narrow refund authority for ${defaultCapabilityRequest.scope.transactions.join(", ")}, up to $${defaultCapabilityRequest.scope.maxAmount} each.`);
-    }, 650);
+      const afterIssues = applyInvestigationFinding(createEmptyFindings(), "inspect_issues", issueSummary);
+      setFindings(afterIssues);
+      addLog("Replay inspected today’s payment issues.");
+      investigationTimer.current = setTimeout(() => {
+        const afterDuplicates = transactions.reduce((current: ReturnType<typeof createEmptyFindings>, transaction: { id: string; amount: number; customer: string }) => (
+          applyInvestigationFinding(current, "inspect_transaction", transaction)
+        ), afterIssues);
+        setFindings(afterDuplicates);
+        addLog("Replay confirmed three duplicate charges.");
+        investigationTimer.current = setTimeout(() => {
+          const afterRetries = retryablePayments.reduce((current, id) => (
+            applyInvestigationFinding(current, "retry_payment", { ok: true, id })
+          ), afterDuplicates);
+          setFindings(afterRetries);
+          addLog("Replay resolved pre-authorized retries.");
+          setPhase("request");
+          addLog("Inspection confirmed three duplicate charges. No refund capability is available.");
+          addLog(`Sloth requested narrow refund authority for ${defaultCapabilityRequest.scope.transactions.join(", ")}, up to $${defaultCapabilityRequest.scope.maxAmount} each.`);
+        }, 450);
+      }, 450);
+    }, 350);
   }
 
   function grantScope() {
@@ -225,6 +269,7 @@ export default function Home() {
   }
 
   function replay() {
+    if (investigationTimer.current) clearTimeout(investigationTimer.current);
     setPhase("idle");
     setGrantActive(false);
     setPendingRequest(defaultCapabilityRequest);
@@ -232,6 +277,7 @@ export default function Home() {
     setMaxAmount(defaultCapabilityRequest.scope.maxAmount);
     setAdjusting(false);
     setToolResult(null);
+    setFindings(createEmptyFindings());
     setLogs([{ time: clock(), message: "Run reset. Four baseline capabilities remain available; no refund authority is exposed." }]);
   }
 
@@ -274,7 +320,12 @@ export default function Home() {
         <p className="eyebrow">Payment operations / controlled scenario</p>
         <h1>Clean up today’s<br /><span>payment problems.</span></h1>
         <p className="lead">Hand Sloth the outcome. It only stops when it genuinely needs your authority.</p>
-        {phase === "idle" ? <button className="primary" onClick={startRun}>Start delegated run <span aria-hidden="true">→</span></button> : phase === "closed" || phase === "denied" ? <button className="primary" onClick={replay}>Replay judge path <span aria-hidden="true">↻</span></button> : <button className="primary" disabled>Delegated run in progress</button>}
+        {phase === "idle"
+          ? nativeStatus === "ready"
+            ? <div className="hero-actions"><p className="hero-note">Native tools are live. The agent investigates by calling them.</p><button className="secondary" onClick={startDemoReplay}>Replay demo path <span aria-hidden="true">↻</span></button></div>
+            : <button className="primary" onClick={startDemoReplay}>Start delegated run <span aria-hidden="true">→</span></button>
+          : phase === "closed" || phase === "denied" ? <button className="primary" onClick={replay}>Replay judge path <span aria-hidden="true">↻</span></button>
+          : <button className="primary" disabled>Delegated run in progress</button>}
       </section>
 
       <section className="console" aria-label="Sloth operations console">
@@ -295,9 +346,9 @@ export default function Home() {
           <div className="investigation">
             <div className="section-label"><span>01</span> Agent investigation</div>
             <div className="issue-grid">
-              <article><span className="issue-count">14</span><p>payment issues reviewed</p></article>
-              <article><span className="issue-count amber">03</span><p>duplicate charges confirmed</p></article>
-              <article><span className="issue-count mint">08</span><p>retries resolved safely</p></article>
+              <article><span className={`issue-count${findings.issuesReviewed == null ? " pending" : ""}`}>{padCount(findings.issuesReviewed)}</span><p>payment issues reviewed</p></article>
+              <article><span className={`issue-count amber${findings.duplicatesConfirmed == null ? " pending" : ""}`}>{padCount(findings.duplicatesConfirmed)}</span><p>duplicate charges confirmed</p></article>
+              <article><span className={`issue-count mint${findings.retriesResolved == null ? " pending" : ""}`}>{padCount(findings.retriesResolved)}</span><p>retries resolved safely</p></article>
             </div>
           </div>
 

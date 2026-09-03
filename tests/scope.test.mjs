@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { defaultCapabilityRequest, planRefunds, retryPayment, validateCapabilityRequest, validateRefund } from "../scope.js";
+import { applyInvestigationFinding, createEmptyFindings, defaultCapabilityRequest, issueSummary, planRefunds, retryPayment, validateCapabilityRequest, validateRefund } from "../scope.js";
 
 const fullGrant = defaultCapabilityRequest.scope;
 
@@ -91,4 +91,30 @@ test("retry policy accepts inspected failures and rejects arbitrary payments", (
   assert.equal(allowed.policy.maxAttempts, 1);
   assert.equal(blocked.ok, false);
   assert.equal(blocked.error.code, "PREAUTHORIZED_POLICY_VIOLATION");
+});
+
+test("investigation findings stay empty until the matching tool runs", () => {
+  const idle = createEmptyFindings();
+  assert.equal(idle.issuesReviewed, null);
+  assert.equal(idle.duplicatesConfirmed, null);
+  assert.equal(idle.retriesResolved, null);
+  const ignored = applyInvestigationFinding(idle, "retry_payment", retryPayment({ id: "TX-48" }));
+  assert.equal(ignored.retriesResolved, null);
+});
+
+test("inspect_issues reveals reviewed issues and confirmed duplicates", () => {
+  const result = applyInvestigationFinding(createEmptyFindings(), "inspect_issues", issueSummary);
+  assert.equal(result.issuesReviewed, 14);
+  assert.equal(result.duplicatesConfirmed, 3);
+  assert.equal(result.retriesResolved, null);
+});
+
+test("inspect_transaction and successful retries accumulate only after those calls", () => {
+  let findings = applyInvestigationFinding(createEmptyFindings(), "inspect_transaction", { id: "TX-48", amount: 48 });
+  findings = applyInvestigationFinding(findings, "inspect_transaction", { id: "TX-72", amount: 72 });
+  findings = applyInvestigationFinding(findings, "retry_payment", retryPayment({ id: "PAY-17" }));
+  findings = applyInvestigationFinding(findings, "retry_payment", retryPayment({ id: "PAY-17" }));
+  assert.equal(findings.duplicatesConfirmed, 2);
+  assert.equal(findings.retriesResolved, 1);
+  assert.equal(findings.issuesReviewed, null);
 });

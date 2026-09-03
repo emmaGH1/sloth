@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 17 — public native WebMCP retest passed.** Sloth is publicly live at `https://sloth-webmcp.theboyemma.chatgpt.site`. The public GitHub repository is `https://github.com/emmaGH1/sloth.git` and includes an MIT license. The deployed application is Sites version 5 from source commit `a159a7e`; current `main` is `6a16c7e`.
+**Checkpoint 18 — investigation findings are tool-driven.** Sloth is publicly live at `https://sloth-webmcp.theboyemma.chatgpt.site`. The public GitHub repository is `https://github.com/emmaGH1/sloth.git` and includes an MIT license. The deployed application is still Sites version 5 from source commit `a159a7e`. Source on `main` now includes the tool-driven investigation batch and needs a Sites save/deploy.
 
 ## Product in one sentence
 
@@ -23,11 +23,13 @@
 - `request_capability` validates capability, verified transaction IDs, maximum amount, and reason. Its payload is the source of truth for the human approval card.
 - Approving a request dynamically registers `refund_scoped_transactions`. It enforces the immutable approved IDs and cap with structured `SCOPE_VIOLATION` errors.
 - Adjusting to $72 refunds TX-48 and TX-72 while deferring TX-184. Ending a run removes the temporary tool.
+- Investigation counts start empty (`—`) and appear only when the matching tool runs: `inspect_issues` reveals reviewed issues and confirmed duplicates, `inspect_transaction` accumulates verified duplicates, and successful `retry_payment` calls accumulate retries. A blocked retry does not increment the count.
+- When native WebMCP is online, the hero tells the agent to investigate by calling tools. **Replay demo path** is a labelled fallback, not the primary proof. Without native WebMCP, **Start delegated run** still replays the story under **Demo replay mode**.
 - The header reads `Payment operations / controlled scenario` and presents a composed `WebMCP / Native tools online` status; it falls back to `Demo replay mode` when native WebMCP is unavailable.
 
 ## Verified state
 
-- `npm test`: 12 passing request, retry-policy, scope, and planning tests (2026-09-03).
+- `npm test`: 15 passing request, retry-policy, scope, planning, and investigation-finding tests (2026-09-03).
 - `npm run build`: passes (2026-09-03).
 - GitHub was tested anonymously with credentials disabled and is public.
 - The public Sites URL returned HTTP 200 without a signed-in session.
@@ -44,13 +46,13 @@
   9. In-scope refunds of TX-48 and TX-72 succeeded; TX-184 stayed untouched under the $72 cap.
   10. Ending the run removed `refund_scoped_transactions`; tool count and rail returned to four.
 
-## Next product batch
+- Local native retest of the investigation batch on `http://localhost:3000` with the same Inspector APIs: idle counts were `— / — / —`; `inspect_issues` revealed `14` and `03` while retries stayed hidden; `PAY-17` incremented retries to `01`; `TX-48` stayed blocked and did not increment; native `request_capability` still opened the grant card; 4 → 5 → 4, `SCOPE_VIOLATION`, and in-scope refunds still passed; reset hid the counts again; labelled **Replay demo path** then revealed `14 / 03 / 08` and the request card.
 
-Make the investigation state truthful and agent-driven:
+## Risks / open items
 
-- Hide completed investigation findings until their corresponding native tool calls occur; the idle screen currently exposes the finished counts too early.
-- Let natural-language agent tool calls advance the judge path, with deterministic replay clearly labelled as fallback rather than the primary proof.
-- Preserve the verified 4 → 5 → 4 lifecycle and do not begin a broad visual redesign before this behavior is real.
+- The public chatgpt.site deployment is still Sites version 5 (`a159a7e`) and does not yet include the tool-driven investigation UI. This Grok session does not have ChatGPT Sites save/deploy tools. After push, save a version from the investigation commit and deploy it to the existing public URL.
+- WebMCP remains a preview API and requires the appropriate browser support or testing flag. The app degrades visibly and safely if unavailable.
+- Do not ship the Pinterest-derived running-sloth logo.
 
 ## Operating rules
 
@@ -61,4 +63,4 @@ Make the investigation state truthful and agent-driven:
 
 ## NEXT ACTION
 
-Implement the truthful, tool-driven investigation state as the next focused batch.
+Save and deploy the investigation-batch commit to the existing public ChatGPT Site (`https://sloth-webmcp.theboyemma.chatgpt.site`), then repeat the native Inspector path on the live URL to confirm idle counts stay hidden until tool calls.

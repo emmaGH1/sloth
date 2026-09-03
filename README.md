@@ -24,12 +24,14 @@ Create the production bundle with `npm run build`.
 
 ## Judge path
 
-1. Select **Start delegated run**.
-2. Wait for the confirmed duplicate-charge request.
-3. Select **Allow this scope** (or reduce the cap with **Adjust**).
-4. Notice `refund_scoped_transactions` enter the Authority rail.
-5. Select **Test an out-of-scope call** to surface the machine-readable enforcement error.
-6. Select **Execute verified refunds**.
-7. Select **End run & revoke authority** and watch the capability disappear.
+Native WebMCP is the primary proof. In Chrome with WebMCP enabled, or in ChatGPT’s in-app browser, the agent should:
 
-The in-console simulation is intentional: it preserves the demo story even when a browser does not expose the experimental WebMCP API. Native compatibility is reported in the header. The project is packaged for ChatGPT Sites hosting.
+1. Discover the four baseline tools. `refund_scoped_transactions` must be absent.
+2. Call `inspect_issues`, `inspect_transaction`, and `retry_payment`. Investigation counts appear only after those calls.
+3. Call `request_capability` with the verified transaction IDs, maximum amount, and reason.
+4. Select **Allow this scope** (or reduce the cap with **Adjust**).
+5. Notice `refund_scoped_transactions` enter the Authority rail.
+6. An out-of-scope refund returns a machine-readable `SCOPE_VIOLATION`.
+7. In-scope refunds complete; **End run & revoke authority** removes the fifth tool.
+
+If native WebMCP is unavailable, the header shows **Demo replay mode**. **Start delegated run** then replays the labelled fallback path. The in-console simulation must not be confused for native agent execution. The project is packaged for ChatGPT Sites hosting.
