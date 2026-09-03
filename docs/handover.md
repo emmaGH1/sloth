@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 6 — correctness pass validated.** Sloth is live at `https://sloth-webmcp.theboyemma.chatgpt.site`; the next private version closes the scope-enforcement and adjusted-grant defects found during live QA.
+**Checkpoint 7 — correctness pass deployed and live-verified.** Sloth Sites version 3 is live at `https://sloth-webmcp.theboyemma.chatgpt.site` with the scope-enforcement and adjusted-grant defects closed.
 
 ## Locked decisions
 
@@ -30,6 +30,9 @@
 - Successful native WebMCP refund calls now update the visible outcome state as well as returning the structured result.
 - `npm test` now passes 8 focused scope/planning tests; the Sites production build succeeds.
 - Live QA found and corrected a browser compatibility issue in the adjustment slider by binding the direct input event; the displayed and granted cap now follows pointer/keyboard changes.
+- Live Sites QA passed: a $72 adjusted grant exposes the temporary tool, returns one deduplicated structured rejection for `TX-999`, refunds only TX-48 and TX-72, defers TX-184, and removes the tool at run end.
+- Deny and replay paths passed on the deployed site; authority remained at four tools after denial and reset returned to idle.
+- The deployed page produced no browser warnings or errors during the full correctness matrix.
 
 ## Risks / open items
 
@@ -39,4 +42,4 @@
 
 ## NEXT ACTION
 
-Publish this correctness checkpoint privately, then run the deployed approve, adjusted-cap, deny, replay, and revoke paths. After that, verify native tool discovery and removal in the user’s WebMCP-enabled Chrome.
+Verify native tool discovery, invocation, and removal on the deployed URL in the user’s WebMCP-enabled Chrome. UI reveal and motion polish can begin after native proof is captured.
