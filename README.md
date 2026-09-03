@@ -60,4 +60,4 @@ Node 22.13+. `npm run build` is the ChatGPT Sites / vinext bundle.
 
 ## License
 
-MIT. Keep the in-product “S” mark; do not use the Pinterest-derived running-sloth image.
+MIT.
