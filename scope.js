@@ -120,10 +120,21 @@ export function retryPayment(input) {
 export function planRefunds(grant) {
   const allowedIds = new Set(grant.transactions);
   const requested = confirmedTransactions.filter((transaction) => allowedIds.has(transaction.id));
-  return {
-    approved: requested.filter((transaction) => transaction.amount <= grant.maxAmount),
-    deferred: requested.filter((transaction) => transaction.amount > grant.maxAmount)
-  };
+  const maxTotal = typeof grant.maxTotalAmount === "number" && Number.isFinite(grant.maxTotalAmount) ? grant.maxTotalAmount : Infinity;
+  const approved = [];
+  const deferred = [];
+  let currentTotal = 0;
+
+  for (const transaction of requested) {
+    if (transaction.amount <= grant.maxAmount && (currentTotal + transaction.amount) <= maxTotal) {
+      approved.push(transaction);
+      currentTotal += transaction.amount;
+    } else {
+      deferred.push(transaction);
+    }
+  }
+
+  return { approved, deferred };
 }
 
 export function validateRefund(input, grant) {
@@ -141,6 +152,8 @@ export function validateRefund(input, grant) {
   const allowedIds = new Set(grant.transactions);
   const seen = new Set();
   const rejected = [];
+  let totalRequestedAmount = 0;
+
   for (const item of requested) {
     const transaction = confirmedTransactions.find((candidate) => candidate.id === item?.id);
     const amount = item?.amount;
@@ -151,7 +164,19 @@ export function validateRefund(input, grant) {
     if (Number.isFinite(amount) && amount > grant.maxAmount) violations.push("AMOUNT_OVER_GRANT");
     if (transaction && Number.isFinite(amount) && amount > transaction.amount) violations.push("AMOUNT_OVER_TRANSACTION");
     if (violations.length) rejected.push({ id: item?.id, amount: item?.amount, violations });
+    if (typeof amount === "number" && Number.isFinite(amount) && amount > 0) {
+      totalRequestedAmount += amount;
+    }
     seen.add(item?.id);
+  }
+
+  const maxTotal = typeof grant.maxTotalAmount === "number" && Number.isFinite(grant.maxTotalAmount) ? grant.maxTotalAmount : Infinity;
+  if (totalRequestedAmount > maxTotal) {
+    rejected.push({
+      id: "BATCH_TOTAL",
+      amount: totalRequestedAmount,
+      violations: ["AGGREGATE_AMOUNT_OVER_GRANT"]
+    });
   }
 
   if (rejected.length) {
@@ -162,6 +187,7 @@ export function validateRefund(input, grant) {
         message: "Refund call is outside the temporary authority grant.",
         allowedTransactions: [...grant.transactions],
         maxAmountPerTransaction: grant.maxAmount,
+        maxTotalAmount: Number.isFinite(maxTotal) ? maxTotal : undefined,
         transactionLimits: Object.fromEntries(confirmedTransactions.filter(({ id }) => allowedIds.has(id)).map((item) => [item.id, item.amount])),
         rejected
       }

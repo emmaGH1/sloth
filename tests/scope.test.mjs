@@ -118,3 +118,21 @@ test("inspect_transaction and successful retries accumulate only after those cal
   assert.equal(findings.retriesResolved, 1);
   assert.equal(findings.issuesReviewed, null);
 });
+
+test("rejects a refund batch that breaches the aggregate run cap", () => {
+  const result = validateRefund(
+    { transactions: [{ id: "TX-48", amount: 48 }, { id: "TX-72", amount: 72 }] },
+    { transactions: ["TX-48", "TX-72"], maxAmount: 72, maxTotalAmount: 100 }
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "SCOPE_VIOLATION");
+  assert.equal(result.error.maxTotalAmount, 100);
+  assert.deepEqual(result.error.rejected[0].violations, ["AGGREGATE_AMOUNT_OVER_GRANT"]);
+});
+
+test("plans refunds bounded by both per-item cap and aggregate cap", () => {
+  const plan = planRefunds({ transactions: ["TX-48", "TX-72", "TX-184"], maxAmount: 72, maxTotalAmount: 150 });
+  assert.deepEqual(plan.approved.map(({ id }) => id), ["TX-48", "TX-72"]);
+  assert.deepEqual(plan.deferred.map(({ id }) => id), ["TX-184"]);
+});
+
