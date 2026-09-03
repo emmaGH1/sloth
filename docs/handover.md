@@ -38,8 +38,8 @@
 
 - Native browser testing remains required: WebMCP is a preview API and may require an enabled flag, origin trial, or browser extension. The app degrades visibly and safely if unavailable.
 - Automated browser control could not load the local server because its localhost client is blocked in this environment. The local server itself returned HTTP 200; repeat browser verification directly in the user’s Chrome/ChatGPT environment.
-- Live Chrome diagnosis on 2026-09-03 confirmed that the deployed page loads normally but `document.modelContext`, `navigator.modelContext`, and the testing surface are absent in that tab. The header correctly reports `Visual fallback active`; Chrome’s WebMCP runtime is not enabled for the tab. The page already targets the current `document.modelContext.registerTool` API.
+- Native Chrome discovery passed on 2026-09-03 after enabling WebMCP and installing Google’s Model Context Tool Inspector. The deployed page reports `WebMCP ready`, and the Inspector displays Sloth’s four initial safe tools. Native invocation, dynamic refund-tool exposure, scope rejection, and removal remain to be verified.
 
 ## NEXT ACTION
 
-Enable Chrome’s `chrome://flags/#enable-webmcp-testing` flag, relaunch Chrome, then reload the deployed URL and verify the header changes to `WebMCP ready`. After that, verify native tool discovery, invocation, and removal. UI reveal and motion polish can begin after native proof is captured.
+Use the Inspector’s manual tool controls (no Gemini key required) to verify native invocation, dynamic refund-tool exposure, `SCOPE_VIOLATION`, successful scoped execution, and refund-tool removal. UI reveal and motion polish can begin after the complete native path is captured.
