@@ -18,6 +18,8 @@ Sloth is a payment-operations sandbox that demonstrates a safer human-agent oper
 - **Source:** https://github.com/emmaGH1/sloth
 - **License:** MIT
 
+Final submission execution, proof claims and freeze rules are tracked in [PLAYBOOK.md](./PLAYBOOK.md).
+
 Sloth is a capability-policy prototype, not a production payment processor. It moves no real funds and contains no authentication, customer data or payment-provider integration. “Sloth” is a hackathon working name.
 
 ## The problem

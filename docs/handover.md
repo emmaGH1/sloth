@@ -2,7 +2,9 @@
 
 ## Status
 
-**Checkpoint 23 — pre-video truthfulness fixes complete and verified; not yet deployed.** Production https://sloth-webmcp.vercel.app still runs tagged app `checkpoint-22` (`a657f5e`). This checkpoint removes native/simulation ambiguity, keeps the authority rail at 04 until fifth-tool registration succeeds, makes the single-use batch policy explicit, removes stale “Live”/TTL state after consumption, replaces fake time identifiers, and removes the rejected running-sloth artwork from the rendered app. Deploy only after the checks below remain green.
+**Checkpoint 23 — pre-video truthfulness fixes complete, verified and committed locally; not yet deployed.** Production https://sloth-webmcp.vercel.app still runs tagged app `checkpoint-22` (`a657f5e`). This checkpoint removes native/simulation ambiguity, keeps the authority rail at 04 until fifth-tool registration succeeds, makes the single-use batch policy explicit, removes stale “Live”/TTL state after consumption, replaces fake time identifiers, and removes the rejected running-sloth artwork from the rendered app. Deploy only after the checks below remain green.
+
+The final submission strategy, honesty matrix, release gate, video script and WAT clock are maintained in [`PLAYBOOK.md`](../PLAYBOOK.md). Treat it as the execution source of truth; this handover remains the technical state record.
 
 ## Product in one sentence
 
@@ -48,11 +50,11 @@ You should see: four tools (no refund) → counts unmask → authority card from
 
 ## What’s left (human)
 
-1. Commit and deploy Checkpoint 23, then walk the native path on the live URL. If it fails, that is the only remaining code work.
+1. Obtain explicit approval to push current local `main`, confirm the deployment, then walk the native path on the live URL. If it fails, that is the only remaining code work.
 2. Record it once, under three minutes (console beside ChatGPT/Inspector; nine PRD beats; no Fast-forward/architecture climax).
 3. Paste Devpost description + testing instructions from this file / README.
 4. Freeze. Do not keep editing after the video.
 
 ## NEXT ACTION
 
-Commit and deploy Checkpoint 23. Walk native evaluation on https://sloth-webmcp.vercel.app with header **Native Live**, including the 04 → registering → 05 transition and one valid refund batch. Then record and freeze.
+Obtain explicit approval to push current local `main`, confirm the deployment, and walk native evaluation on https://sloth-webmcp.vercel.app with header **Native Live**, including the 04 → registering → 05 transition and one valid refund batch. Then record and freeze.
