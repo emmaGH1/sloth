@@ -15,7 +15,7 @@
 - Deny uses a `phaseRef`, so native `request_capability` actually returns `DO_NOT_RETRY`.
 - TTL is **600s (10:00)** with Fast-forward. 60s was dropping the native tool before ChatGPT could refund.
 - Boundary buttons log `summarizeRefundResult(response)` instead of hardcoded rejections.
-- Console is first after a compact hero; architecture is a short strip, not `100vh`. Running-sloth logo kept.
+- Console stays directly under the hero; architecture is a short strip, not `100vh`. Large hero scale restored (type, padding, 380px graphic). Running-sloth logo kept.
 - README/handover match the UI. Canonical ChatGPT prompt lives in the README. Audit export is a client-side JSON dump, not a compliance ledger.
 
 ## Current implementation
