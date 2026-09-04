@@ -47,17 +47,15 @@
 **Live app:** https://sloth-webmcp.vercel.app  
 **Repo:** https://github.com/emmaGH1/sloth (MIT)
 
-The header chip is the mode. **WebMCP / Native Live** = real tools. **WebMCP / Simulation** = labelled replay, not native proof. Do not click Launch Delegated Run if you are evaluating native tools.
+Judge path is native WebMCP only (see README). Header must read **WebMCP / Native Live**. Do not click Launch Delegated Run.
 
-**Track A (recommended).** Chrome 149+ with `chrome://flags/#enable-webmcp-testing`, or ChatGPT’s in-app browser. Prompt:
+Chrome 149+ with `chrome://flags/#enable-webmcp-testing`, or ChatGPT’s in-app browser. Prompt:
 
 ```
 Clean up today’s payment problems. Only bother me when you actually need my authority.
 ```
 
 You should see: four tools (no refund) → investigation counts unmask → authority card from the agent payload → Adjust to $72 / item and $150 aggregate → fifth tool appears → out-of-scope call returns SCOPE_VIOLATION → TX-48 and TX-72 refund → tool gone (rail 04).
-
-**Track B (no WebMCP).** Click Launch Delegated Run, Adjust $72 / $150, Confirm revised grant, probe TX-999, Execute verified refunds (single-use).
 
 ## NEXT ACTION
 

@@ -3,71 +3,51 @@
 > **Delegate outcomes, not unlimited access.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![WebMCP Protocol](https://img.shields.io/badge/WebMCP-Native%20%26%20Replay%20Ready-lime.svg)](https://webmcp.devpost.com/)
-[![Vercel Deployment](https://img.shields.io/badge/Vercel-Live-black.svg)](https://sloth-webmcp.vercel.app)
+[![WebMCP](https://img.shields.io/badge/WebMCP-Native-lime.svg)](https://webmcp.devpost.com/)
+[![Live](https://img.shields.io/badge/Live-sloth--webmcp.vercel.app-black.svg)](https://sloth-webmcp.vercel.app)
 
-**Sloth** is a payment-operations sandbox for the [WebMCP Challenge](https://webmcp.devpost.com/). An agent starts with four baseline tools, investigates, then asks for one temporary refund capability. The human can allow, adjust, or deny. Scope is enforced **inside the tool**, then the tool is removed.
+A payment-operations sandbox for the [WebMCP Challenge](https://webmcp.devpost.com/). An agent starts with four baseline tools, investigates on its own, then asks for one temporary refund capability. You allow, adjust, or deny. Scope is enforced **inside the tool**. After an in-scope refund, the tool is gone.
 
 Not a production processor. No real funds, auth, or customer data. “Sloth” is a working name only.
 
-## Live
-
 - App: https://sloth-webmcp.vercel.app
-- Repo: https://github.com/emmaGH1/sloth.git (MIT)
+- Repo: https://github.com/emmaGH1/sloth (MIT)
 
-## Canonical prompts
+## Evaluate (native WebMCP)
 
-Use the outcome, not a script of tool calls.
+This submission is judged on a **live agent** talking to the page’s tools. Do **not** click **Launch Delegated Run**.
 
-**ChatGPT / natural-language agent**
+The header must read **`WebMCP / Native Live`**. If it says **Simulation**, native tools are not available in that browser — stop and switch.
+
+**Setup.** Chrome 149+ with `chrome://flags/#enable-webmcp-testing` enabled (relaunch Chrome), or ChatGPT’s in-app browser. Optional: [Model Context Tool Inspector](https://chromewebstore.google.com/detail/model-context-tool-inspec/gbpdfapgefenggkahomfgkhfehlcenpd).
+
+Open https://sloth-webmcp.vercel.app. Rail **04**. Counts are **—**. `refund_scoped_transactions` does not exist.
+
+### ChatGPT
+
+Paste only this, then watch the **page**:
 
 ```
 Clean up today’s payment problems. Only bother me when you actually need my authority.
 ```
 
-**Inspector / explicit evaluation prompt**
+You should see counts unmask as the agent inspects, then an authority card. That card is the hard boundary: refunds are still impossible.
 
-```
-Inspect today's payment issues, retry any pre-authorized failures, and request narrow capability to refund confirmed duplicate charges up to the verified amounts.
-```
+**Your turn.** Click **Adjust**. Set per-item **$72** and aggregate **$150**. Click **Confirm revised grant**.
 
-## Architecture
+Rail **05**. A fifth tool exists. TTL starts near **10:00**.
 
-WebMCP makes the page’s live tool inventory the authorization boundary. `refund_scoped_transactions` does not exist until a human grant registers it, and it is unregistered on consume, deny, end, or TTL expiry.
+The agent should try something out of scope, get `SCOPE_VIOLATION` (rail stays **05**), then refund **TX-48 $48** and **TX-72 $72**, leaving **TX-184**. Rail returns **04**. The refund tool is consumed.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Human as Human Ops Lead
-    participant WebMCP as WebMCP Runtime
-    participant Agent as Autonomous Agent
-    participant Engine as Scope Policy Engine
+### Inspector
 
-    Note over WebMCP: Baseline (04 tools)
-    Agent->>WebMCP: inspect_issues() & inspect_transaction()
-    Agent->>WebMCP: retry_payment({ id: "PAY-17" })
-    Agent->>WebMCP: request_capability({ capability: "refund_scoped_transactions", scope: { transactions: ["TX-48","TX-72","TX-184"], maxAmount: 184, maxTotalAmount: 304 }, reason: "Duplicate charges" })
-    WebMCP->>Human: Approval card from request payload
-    Human->>Human: Adjust to $72 / item and $150 aggregate
-    Human->>WebMCP: Approve grant
-    Note over WebMCP: 05 tools · 10-minute TTL
-    Agent->>Engine: refund({ id: "TX-999", amount: 220 })
-    Engine-->>Agent: SCOPE_VIOLATION
-    Agent->>Engine: refund TX-48 $48 and TX-72 $72
-    Engine-->>Agent: Success · grant consumed (05 → 04)
-```
+Same path; you drive the tools.
 
-## Tool contracts
-
-| Tool | When | Contract |
-| --- | --- | --- |
-| `inspect_issues` | Always | Read-only issue summary. UI counts stay `—` until called. |
-| `inspect_transaction` | Always | Read-only lookup by ID. |
-| `retry_payment` | Always, pre-authorized | Failed IDs only (`PAY-17` ok, `TX-48` → `PREAUTHORIZED_POLICY_VIOLATION`). |
-| `request_capability` | Always | Payload is the approval-card source of truth: `transactions`, `maxAmount`, `maxTotalAmount`, `reason`. After deny, further requests return `DO_NOT_RETRY`. |
-| `refund_scoped_transactions` | After human grant | Immutable IDs, per-item cap, aggregate cap (including spend from earlier calls). Out of scope → `SCOPE_VIOLATION`. Unregistered after an in-scope success, End run, deny, or TTL expiry. |
-
-### `request_capability` payload
+1. Confirm four tools. No `refund_scoped_transactions`.
+2. `inspect_issues` → counts **14 / 03**.
+3. `inspect_transaction` `{ "id": "TX-48" }` (then TX-72, TX-184 if you want).
+4. `retry_payment` `{ "id": "PAY-17" }` succeeds. `{ "id": "TX-48" }` → `PREAUTHORIZED_POLICY_VIOLATION`.
+5. `request_capability`:
 
 ```json
 {
@@ -77,38 +57,37 @@ sequenceDiagram
     "maxAmount": 184,
     "maxTotalAmount": 304
   },
-  "reason": "Confirmed duplicate charges across payment batches"
+  "reason": "Confirmed duplicate charges"
 }
 ```
 
-The approval card renders this payload. Adjusting the sliders changes the grant that is later enforced; it does not invent a hidden 150/304 threshold.
+The card shows **$184 / item** and **$304 aggregate**. Rail still **04**.
 
-## Judge verification
+6. **Adjust** to **$72** and **$150**, then **Confirm revised grant**. Fifth tool appears. Rail **05**.
+7. `refund_scoped_transactions` with TX-999 / $220 → `SCOPE_VIOLATION`. Rail stays **05**.
+8. `refund_scoped_transactions` with TX-48 $48 and TX-72 $72. Success consumes the grant. Rail **04**.
 
-Header must read **`WebMCP / Native Live`** for native proof, or **`WebMCP / Simulation`** for the labelled fallback.
+## What “good” looks like
 
-### Track A — Native WebMCP
+| Beat | Pass |
+| --- | --- |
+| Before grant | Exactly four tools. No refund tool. Counts stay `—` until the matching call. |
+| Request | Card numbers come from the agent payload, not a hidden default. |
+| After adjust | Fifth tool exists. Enforced cap is $72 / $150, not $184 / $304. |
+| Out of scope | One `SCOPE_VIOLATION`. Tool stays registered. |
+| In scope | TX-48 and TX-72 refunded, TX-184 untouched. Tool unregistered. Rail 04. |
 
-Chrome 149+ with `chrome://flags/#enable-webmcp-testing`, or the [Model Context Tool Inspector](https://chromewebstore.google.com/detail/model-context-tool-inspec/gbpdfapgefenggkahomfgkhfehlcenpd), or ChatGPT’s in-app browser.
+Deny is supported (`DO_NOT_RETRY` on later `request_capability`). It is not the recorded path.
 
-1. Confirm four tools. `refund_scoped_transactions` is absent. Rail `04`.
-2. `inspect_issues` → counts `14` / `03`.
-3. `retry_payment` `{ "id": "PAY-17" }` succeeds; `{ "id": "TX-48" }` is blocked.
-4. `request_capability` with the payload above. The card shows `$184` / item and `$304` aggregate.
-5. Click **Adjust**, set per-item **$72** and aggregate **$150**, then **Confirm revised grant**. Rail `05`. TTL starts at **10:00**.
-6. Refund `{ "id": "TX-999", "amount": 220 }` → `SCOPE_VIOLATION`. Grant remains.
-7. Refund TX-48 `$48` and TX-72 `$72`. TX-184 stays untouched. Grant is consumed; rail returns to `04`.
-8. Optional: **Export audit (.json)** is a client-side run record, not a signed ledger.
+## Tools
 
-### Track B — Console replay (no WebMCP)
-
-1. Click **Launch Delegated Run** (or **Trigger Delegated Run** in the console).
-2. Counts unmask as the replay runs: `14` issues, `03` duplicates, `01` retry.
-3. **Adjust** to **$72** / item and **$150** aggregate, then **Confirm revised grant** (or **Allow this scope** to keep the requested `$184` / `$304`).
-4. Boundary buttons call the same validator as the tool. The activity log reports the **actual** result for the active grant — they will not reject a call the grant allows.
-5. **Execute verified refunds (single-use)** refunds in-scope items and removes the tool.
-6. **Fast-forward** expires a live grant. After a successful refund the grant is already gone, so Fast-forward is hidden.
-7. **End run & revoke authority** or **Re-arm Console** from a terminal state.
+| Tool | When | Contract |
+| --- | --- | --- |
+| `inspect_issues` | Always | Read-only issue summary. |
+| `inspect_transaction` | Always | Read-only lookup by ID. |
+| `retry_payment` | Always, pre-authorized | Failed IDs only (`PAY-17` ok, `TX-48` blocked). |
+| `request_capability` | Always | Payload is the approval-card source of truth. |
+| `refund_scoped_transactions` | After human grant | IDs, per-item cap, aggregate cap (including prior spend). Else `SCOPE_VIOLATION`. Removed on in-scope success, deny, end, or TTL expiry. |
 
 ## Local
 
@@ -119,10 +98,6 @@ npm ci
 npm test
 npm run dev
 ```
-
-`npm run build` is the ChatGPT Sites / vinext bundle.
-
-Unit tests cover request validation (including `maxTotalAmount`), refund planning, per-item and aggregate enforcement, cumulative spend, and consume-on-success policy. They do not drive the browser WebMCP registry; 4 → 5 → 4 is verified on the live rail / Inspector.
 
 ## License
 
