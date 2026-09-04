@@ -8,7 +8,7 @@ The human asks Sloth to clean up payment issues. Sloth investigates with safe to
 
 ## Non-negotiable capability rules
 
-1. `refund_transaction` is absent before a grant and after a run ends.
+1. `refund_scoped_transactions` is absent before a grant and after it is consumed, denied, ended, or expired.
 2. A grant names specific transaction IDs, a per-transaction amount limit, and an aggregate amount limit.
 3. The refund tool checks those constraints (including spend from earlier calls) and returns structured errors for violations.
 4. A rejected action causes the agent to adapt instead of pretending it succeeded.
@@ -25,4 +25,4 @@ The human asks Sloth to clean up payment issues. Sloth investigates with safe to
 
 ## Demo recovery
 
-If native WebMCP is not available in the judge browser, the console’s built-in agent simulation remains the primary visual proof. The app must still show the live tool inventory and structured scope errors.
+If native WebMCP is not available, the console may offer a clearly labelled simulation. When native WebMCP is live, the interface must not present simulation as the primary action or confuse it with agent proof.

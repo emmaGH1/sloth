@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { applyInvestigationFinding, applyRefundSpend, confirmedTotalAmount, confirmedTransactions as transactions, createEmptyFindings, defaultCapabilityRequest, deriveGrant, GRANT_TTL_SECONDS, issueSummary, planRefunds, retryPayment, shouldConsumeGrant, summarizeRefundResult, validateCapabilityRequest, validateRefund } from "../scope.js";
 
 type Phase = "idle" | "investigating" | "request" | "granted" | "completed" | "closed" | "denied" | "expired";
+type CapabilityRegistration = "inactive" | "registering" | "active" | "failed";
 type ToolDefinition = {
   name: string;
   description: string;
@@ -60,10 +61,11 @@ export default function Home() {
   const [ttlSeconds, setTtlSeconds] = useState(GRANT_TTL_SECONDS);
   const [adjusting, setAdjusting] = useState(false);
   const [grantActive, setGrantActive] = useState(false);
+  const [capabilityRegistration, setCapabilityRegistration] = useState<CapabilityRegistration>("inactive");
   const [pendingRequest, setPendingRequest] = useState<CapabilityRequest>(defaultCapabilityRequest);
   const [activeGrant, setActiveGrant] = useState<Grant | null>(null);
   const [toolResult, setToolResult] = useState<Record<string, unknown> | null>(null);
-  const [logs, setLogs] = useState<LogItem[]>([{ time: "09:41:02", message: "Run is waiting for your intent." }]);
+  const [logs, setLogs] = useState<LogItem[]>([{ time: "--:--:--", message: "Run is waiting for your intent." }]);
   const [findings, setFindings] = useState<Findings>(createEmptyFindings);
   const investigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phaseRef = useRef(phase);
@@ -73,12 +75,19 @@ export default function Home() {
   grantActiveRef.current = grantActive;
   activeGrantRef.current = activeGrant;
 
+  useEffect(() => {
+    setLogs((current) => current.length === 1 && current[0].time === "--:--:--"
+      ? [{ ...current[0], time: clock() }]
+      : current);
+  }, []);
+
   const addLog = useCallback((message: string) => {
     setLogs((current) => [...current, { time: clock(), message }]);
   }, []);
 
   const consumeGrant = useCallback((message: string) => {
     setGrantActive(false);
+    setCapabilityRegistration("inactive");
     setPhase("completed");
     addLog(message);
   }, [addLog]);
@@ -175,7 +184,12 @@ export default function Home() {
             setMaxTotalAmount(response.request.scope.maxTotalAmount);
             setPhase("request");
             addLog(`Native agent requested ${response.request.capability} for ${response.request.scope.transactions.length} verified transactions, up to $${response.request.scope.maxAmount} each and $${response.request.scope.maxTotalAmount} aggregate.`);
-            return JSON.stringify({ ok: true, status: "human_authorization_required", request: response.request });
+            return JSON.stringify({
+              ok: true,
+              status: "human_authorization_required",
+              request: response.request,
+              nextStep: "Wait for human approval. If the temporary refund tool appears, submit every intended refund together in one transactions array; the first successful call consumes the single-use capability."
+            });
           }
         }
       ];
@@ -194,13 +208,20 @@ export default function Home() {
   useEffect(() => {
     if (!grantActive || !activeGrant) return;
     const context = getModelContext();
-    if (!context?.registerTool) return;
+    if (!context?.registerTool) {
+      setGrantActive(false);
+      setCapabilityRegistration("failed");
+      setPhase("request");
+      addLog("CAPABILITY_REGISTRATION_FAILED: native model context disappeared before the refund tool could be registered. Authority remains at baseline (04).");
+      return;
+    }
     const controller = new AbortController();
+    let cancelled = false;
     const register = async () => {
       try {
         await context.registerTool({
           name: "refund_scoped_transactions",
-          description: `Refund only ${activeGrant.transactions.join(", ")}, up to $${activeGrant.maxAmount} per transaction and $${activeGrant.maxTotalAmount} aggregate. Return SCOPE_VIOLATION for any other ID, higher amount, or remaining-budget breach.`,
+          description: `Single-use capability. Submit every intended refund together in one transactions array. Refund only ${activeGrant.transactions.join(", ")}, up to $${activeGrant.maxAmount} per transaction and $${activeGrant.maxTotalAmount} aggregate. Return SCOPE_VIOLATION for any other ID, higher amount, or remaining-budget breach. The first successful call consumes and removes this tool.`,
           annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
           inputSchema: {
             type: "object",
@@ -233,12 +254,22 @@ export default function Home() {
             return JSON.stringify(response);
           }
         }, { signal: controller.signal });
+        if (cancelled) return;
+        setCapabilityRegistration("active");
+        addLog("Native WebMCP confirmed refund_scoped_transactions is registered (04 → 05). The single-use capability is ready for one batch call.");
       } catch {
-        addLog("The visual grant is active; native registration was unavailable in this browser context.");
+        if (cancelled) return;
+        setGrantActive(false);
+        setCapabilityRegistration("failed");
+        setPhase("request");
+        addLog("CAPABILITY_REGISTRATION_FAILED: native refund authority was not exposed. Authority remains at baseline (04); approval can be retried.");
       }
     };
     void register();
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [activeGrant, addLog, consumeGrant, grantActive]);
 
   useEffect(() => () => {
@@ -256,6 +287,7 @@ export default function Home() {
   useEffect(() => {
     if (phase !== "granted" || !grantActive || ttlSeconds !== 0) return;
     setGrantActive(false);
+    setCapabilityRegistration("inactive");
     setPhase("expired");
     addLog("CAPABILITY_EXPIRED: grant TTL elapsed; temporary refund capability auto-revoked.");
   }, [addLog, grantActive, phase, ttlSeconds]);
@@ -270,6 +302,7 @@ export default function Home() {
     setTtlSeconds(GRANT_TTL_SECONDS);
     setActiveGrant(null);
     setGrantActive(false);
+    setCapabilityRegistration("inactive");
     setFindings(createEmptyFindings());
     addLog(nativeStatus === "ready"
       ? "Demo replay started. This labelled fallback is not native agent proof."
@@ -302,12 +335,15 @@ export default function Home() {
     const grant = deriveGrant(pendingRequest, { maxAmount, maxTotalAmount });
     setActiveGrant(grant);
     setGrantActive(true);
+    setCapabilityRegistration(nativeStatus === "ready" ? "registering" : "active");
     setTtlSeconds(GRANT_TTL_SECONDS);
     setPhase("granted");
     addLog(`Human granted refund authority: ${grant.transactions.length} transactions, ≤ $${grant.maxAmount} each, ≤ $${grant.maxTotalAmount} aggregate (${GRANT_TTL_SECONDS}s TTL).`);
   }
 
   function denyScope() {
+    setGrantActive(false);
+    setCapabilityRegistration("inactive");
     setPhase("denied");
     addLog("Human denied refund authority. DO_NOT_RETRY policy engaged. Sloth records duplicates and halts safely.");
   }
@@ -341,6 +377,7 @@ export default function Home() {
 
   function endRun() {
     setGrantActive(false);
+    setCapabilityRegistration("inactive");
     setPhase("closed");
     addLog("Run ended. The scoped refund capability was removed.");
   }
@@ -349,6 +386,7 @@ export default function Home() {
     if (investigationTimer.current) clearTimeout(investigationTimer.current);
     setPhase("idle");
     setGrantActive(false);
+    setCapabilityRegistration("inactive");
     setPendingRequest(defaultCapabilityRequest);
     setActiveGrant(null);
     setMaxAmount(defaultCapabilityRequest.scope.maxAmount);
@@ -379,7 +417,7 @@ export default function Home() {
       },
       capabilityRequest: pendingRequest,
       humanGovernance: {
-        status: phase === "denied" ? "DENIED" : phase === "expired" ? "EXPIRED_REVOKED" : activeGrant ? "GRANTED" : "PENDING",
+        status: phase === "denied" ? "DENIED" : phase === "expired" ? "EXPIRED_REVOKED" : phase === "completed" || phase === "closed" ? "CONSUMED_REVOKED" : capabilityRegistration === "failed" ? "REGISTRATION_FAILED" : capabilityRegistration === "registering" ? "REGISTERING" : capabilityRegistration === "active" ? "GRANTED" : "PENDING",
         unitCapApproved: activeGrant?.maxAmount ?? null,
         aggregateCapEnforced: activeGrant?.maxTotalAmount ?? null,
         ttlConfiguredSeconds: GRANT_TTL_SECONDS,
@@ -387,7 +425,7 @@ export default function Home() {
       },
       runtimeLifecycle: {
         initialToolCount: 4,
-        activeToolCount: grantActive ? 5 : 4,
+        activeToolCount: capabilityRegistration === "active" ? 5 : 4,
         currentPhase: phase,
         reversibilityEnforced: true
       },
@@ -408,6 +446,7 @@ export default function Home() {
   }
 
   const isRunning = phase !== "idle" && phase !== "closed" && phase !== "denied" && phase !== "expired";
+  const capabilityLive = grantActive && capabilityRegistration === "active";
   const title = {
     idle: "Waiting for intent",
     investigating: "Investigating payment issues",
@@ -423,7 +462,7 @@ export default function Home() {
     investigating: "Investigating",
     request: "Needs authority",
     granted: "Authority granted",
-    completed: "Ready to revoke",
+    completed: "Capability removed",
     closed: "Closed",
     denied: "Adapted",
     expired: "Expired"
@@ -439,7 +478,7 @@ export default function Home() {
       {/* Navigation Header */}
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Sloth home">
-          <img src="/logo.png" alt="Sloth" className="brand-logo-img" />
+          <span className="brand-mark" aria-hidden="true">S</span>
           <span>SLOTH</span>
         </a>
         <ul className="nav-links">
@@ -466,7 +505,11 @@ export default function Home() {
             <p className="lead">Delegate outcomes, not unlimited access. Sloth equips autonomous agents with narrow baseline tools, surfacing temporary financial capabilities only through verified, human-approved grants.</p>
             <div className="hero-actions">
               {phase === "idle" ? (
-                <button className="primary" onClick={startDemoReplay}>Launch Delegated Run <span aria-hidden="true">→</span></button>
+                nativeStatus === "ready" ? (
+                  <a href="#console" className="primary">Open operations console <span aria-hidden="true">↓</span></a>
+                ) : (
+                  <button className="primary" onClick={startDemoReplay}>Launch simulation <span aria-hidden="true">→</span></button>
+                )
               ) : phase === "closed" || phase === "denied" || phase === "expired" ? (
                 <button className="primary" onClick={replay}>Re-arm Console <span aria-hidden="true">↻</span></button>
               ) : (
@@ -483,7 +526,13 @@ export default function Home() {
           <div className="hero-visual">
             <div className="hero-visual-frame">
               <div className="hero-visual-tag">Runtime Authority Boundary</div>
-              <img src="/hero-sloth.png" alt="Sloth Autonomous Agent" className="hero-img" />
+              <div className="lifecycle-diagram" role="img" aria-label="Four baseline tools become five after a scoped grant and return to four when the capability is removed">
+                <div className="lifecycle-stage"><strong>04</strong><span>Baseline</span></div>
+                <span className="lifecycle-arrow" aria-hidden="true">→</span>
+                <div className="lifecycle-stage granted"><strong>05</strong><span>Scoped</span></div>
+                <span className="lifecycle-arrow" aria-hidden="true">→</span>
+                <div className="lifecycle-stage"><strong>04</strong><span>Removed</span></div>
+              </div>
               <p className="hero-visual-caption">Dynamic Capability Lifecycle · Zero Standing Financial Privileges</p>
             </div>
           </div>
@@ -500,13 +549,13 @@ export default function Home() {
 
         <div className="console" aria-label="Sloth operations console">
           <aside className="authority" aria-label="Authority rail">
-            <div className="rail-head"><p>Authority rail</p><span>{grantActive ? "05" : "04"}</span></div>
-            <div className="rail" aria-hidden="true"><div className="rail-fill" style={{ width: grantActive ? "100%" : "0" }} /></div>
+            <div className="rail-head"><p>Authority rail</p><span>{capabilityLive ? "05" : "04"}</span></div>
+            <div className="rail" aria-hidden="true"><div className="rail-fill" style={{ width: capabilityLive ? "100%" : capabilityRegistration === "registering" ? "50%" : "0" }} /></div>
             <ul className="tool-list">
               {baselineTools.map(({ name, label }) => <li key={name}><span className="tool-dot safe" /><div><code>{name}</code><small>{label}</small></div></li>)}
-              {grantActive && <li><span className="tool-dot active" /><div><code>refund_scoped_transactions</code><small>Granted · temporary</small></div></li>}
+              {capabilityLive && <li><span className="tool-dot active" /><div><code>refund_scoped_transactions</code><small>Granted · single-use</small></div></li>}
             </ul>
-            <p className="rail-note">{grantActive ? "One narrow financial capability is live." : "No financial authority exposed."}</p>
+            <p className="rail-note">{capabilityLive ? "One narrow financial capability is live." : capabilityRegistration === "registering" ? "Registering approved capability. Authority remains at 04 until confirmed." : capabilityRegistration === "failed" ? "Registration failed. No financial authority was exposed." : "No financial authority exposed."}</p>
           </aside>
 
           <div className="workspace">
@@ -524,7 +573,11 @@ export default function Home() {
 
             {phase === "idle" && (
               <div className="console-actions-bar">
-                <button className="primary compact" onClick={startDemoReplay}>Trigger Delegated Run <span aria-hidden="true">→</span></button>
+                {nativeStatus === "ready" ? (
+                  <p className="native-waiting">Native tools are ready. Give your agent the operator intent above.</p>
+                ) : (
+                  <button className="primary compact" onClick={startDemoReplay}>Launch simulation <span aria-hidden="true">→</span></button>
+                )}
               </div>
             )}
 
@@ -532,6 +585,7 @@ export default function Home() {
               <div className="request-title"><span className="request-badge">Authority required</span><p>Sloth reached a hard boundary.</p></div>
               <h3>Agent requests refund authority</h3>
               <p className="request-copy">{pendingRequest.reason} <strong>{requestedTransactions.length} transactions · max ${maxAmount}/item · max ${maxTotalAmount} aggregate cap.</strong></p>
+              {capabilityRegistration === "failed" && <p className="registration-error" role="alert">Native registration failed. No refund tool was exposed; authority remains at 04. Review the request and retry approval.</p>}
               <div className="transactions">{requestedTransactions.map(({ id, amount, customer }: { id: string; amount: number; customer: string }) => <span className="transaction" key={id}><b>{id}</b> · ${amount} · {customer}</span>)}</div>
               {!adjusting ? (
                 <div className="request-actions">
@@ -557,7 +611,7 @@ export default function Home() {
             <div className="enforcement-box" id="enforcement">
               <div className="section-label"><span>02</span> Scoped runtime enforcement &amp; boundary testing</div>
 
-              {(phase === "granted" || phase === "completed") ? (
+              {phase === "granted" && capabilityLive ? (
                 <div className="execution">
                   <div className="grant-strip">
                     <span className="tool-dot active" />
@@ -570,24 +624,24 @@ export default function Home() {
                       )}
                     </div>
                   </div>
-                  {phase === "granted" && (
-                    <>
-                      <div className="execution-actions">
-                        <button className="primary compact" onClick={executeRefunds}>Execute verified refunds (single-use)</button>
+                  <div className="execution-actions">
+                    <button className="primary compact" onClick={executeRefunds}>Execute verified refunds (single-use batch)</button>
+                  </div>
+                  <div className="test-suite-box">
+                    <div className="test-suite-label">Boundary verification (in-tool checks against the active grant)</div>
+                    <div className="test-suite-actions">
+                      <button className="test-suite-btn" onClick={() => runBoundaryTest("Boundary test 1 (TX-999 $220)", { transactions: [{ id: "TX-999", amount: 220 }] })}>1. Unapproved ID (TX-999)</button>
+                      <button className="test-suite-btn" onClick={() => runBoundaryTest("Boundary test 2 (TX-48 $184)", { transactions: [{ id: "TX-48", amount: 184 }] })}>2. Unit amount $184</button>
+                      <button className="test-suite-btn" onClick={() => runBoundaryTest("Boundary test 3 (batch $192)", { transactions: [{ id: "TX-48", amount: 48 }, { id: "TX-72", amount: 72 }, { id: "TX-184", amount: 72 }] })}>3. Batch $192</button>
                       </div>
-                      <div className="test-suite-box">
-                        <div className="test-suite-label">Boundary verification (in-tool checks against the active grant)</div>
-                        <div className="test-suite-actions">
-                          <button className="test-suite-btn" onClick={() => runBoundaryTest("Boundary test 1 (TX-999 $220)", { transactions: [{ id: "TX-999", amount: 220 }] })}>1. Unapproved ID (TX-999)</button>
-                          <button className="test-suite-btn" onClick={() => runBoundaryTest("Boundary test 2 (TX-48 $184)", { transactions: [{ id: "TX-48", amount: 184 }] })}>2. Unit amount $184</button>
-                          <button className="test-suite-btn" onClick={() => runBoundaryTest("Boundary test 3 (batch $192)", { transactions: [{ id: "TX-48", amount: 48 }, { id: "TX-72", amount: 72 }, { id: "TX-184", amount: 72 }] })}>3. Batch $192</button>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  </div>
                   {toolResult && <pre className="tool-result" aria-live="polite">{JSON.stringify(toolResult, null, 2)}</pre>}
                 </div>
-              ) : phase === "closed" || phase === "denied" || phase === "expired" ? null : (
+              ) : phase === "granted" && capabilityRegistration === "registering" ? (
+                <div className="standby-card registration-pending" aria-live="polite">
+                  <p><strong>Registering approved capability…</strong> Authority remains at 04 until the browser confirms the fifth tool.</p>
+                </div>
+              ) : phase === "completed" || phase === "closed" || phase === "denied" || phase === "expired" ? null : (
                 <div className="standby-card">
                   <p>Awaiting capability grant: no financial mutation capability is registered. Approve a request above to activate boundary testing, the TTL countdown, and execution controls.</p>
                 </div>
@@ -600,12 +654,12 @@ export default function Home() {
                     <div>
                       <p className="eyebrow">Outcome delivered</p>
                       <h3>{refundedCount} duplicate charge{refundedCount === 1 ? "" : "s"} refunded.</h3>
-                      <p>{deferredCount ? `${deferredCount} transaction${deferredCount === 1 ? " was" : "s were"} left untouched because the adjusted grant did not cover the amount.` : "Sloth is done. Revoke the temporary authority."}</p>
+                      <p>{deferredCount ? `${deferredCount} transaction${deferredCount === 1 ? " was" : "s were"} left untouched because the adjusted grant did not cover the amount. The single-use refund capability was consumed and removed.` : "Sloth is done. The single-use refund capability was consumed and removed."}</p>
                     </div>
                   </div>
                   <div className="completion-actions">
                     <button className="secondary compact" onClick={exportAuditLedger}>Export audit (.json)</button>
-                    <button className="quiet compact" onClick={endRun}>End run &amp; revoke authority</button>
+                    <button className="quiet compact" onClick={endRun}>Close run</button>
                   </div>
                 </div>
               )}
@@ -730,7 +784,7 @@ export default function Home() {
             <h2>Ready to delegate outcomes with scoped authority?</h2>
             <p>Inspect live WebMCP tools in Chrome DevTools or Google’s Model Context Tool Inspector, test autonomous runtime adaptation, and explore how just-in-time capability grants replace permanent API keys.</p>
             <div className="cta-actions">
-              <a href="#console" className="primary" onClick={phase === "idle" ? startDemoReplay : undefined}>Launch Delegated Run <span aria-hidden="true">→</span></a>
+              <a href="#console" className="primary">Open operations console <span aria-hidden="true">↓</span></a>
               <a href="https://github.com/emmaGH1/sloth.git" target="_blank" rel="noreferrer" className="secondary">View GitHub Source <span aria-hidden="true">↗</span></a>
             </div>
           </div>
@@ -747,7 +801,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="site-footer">
         <div className="footer-brand">
-          <img src="/logo.png" alt="Sloth" className="footer-logo" />
+          <span className="brand-mark" aria-hidden="true">S</span>
           <span>SLOTH — Delegate outcomes, not unlimited access.</span>
         </div>
         <div>MIT License · WebMCP Challenge Submission</div>

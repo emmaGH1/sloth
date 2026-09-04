@@ -250,7 +250,7 @@ export function validateRefund(input, grant) {
   return {
     ok: true,
     refunds: requested.map(({ id, amount }) => ({ id, amount, status: "refunded" })),
-    authority: "grant-09:41",
+    authority: "temporary-refund-grant",
     message: "Refunded within the human-approved scope."
   };
 }

@@ -32,7 +32,7 @@ WebMCP makes the browser page’s live tool inventory an authorization boundary.
 6. `refund_scoped_transactions` appears dynamically with the approved scope.
 7. A broader call is rejected with a structured `SCOPE_VIOLATION`.
 8. The agent adapts, refunding TX-48 and TX-72 while leaving TX-184 untouched.
-9. The task ends; the temporary tool is removed and the authority rail returns from five tools to four.
+9. The agent submits the approved refunds in one batch; the single-use tool is consumed and removed, and the authority rail returns from five tools to four.
 
 ## Tool contract
 
@@ -51,7 +51,7 @@ All schemas reject unexpected properties and use precise bounds. Inspection tool
 - **Initial:** Show unresolved work and four available capabilities; do not reveal completed investigation results.
 - **Investigating:** Reveal findings only as agent tools execute and record each decision in the activity log.
 - **Boundary:** Present the agent-proposed scope with clear Allow, Adjust, and Deny actions.
-- **Granted:** Make the fifth tool’s appearance and exact scope visually unmistakable.
+- **Granted:** Keep the rail at four while registration is pending; show the fifth tool and exact scope only after native registration succeeds.
 - **Rejected:** Show that the tool—not merely the interface—blocked the call, then show the agent adapting.
 - **Complete:** Remove the capability visibly and confirm the authority count returns to four.
 - **Fallback:** If native WebMCP is absent, label the deterministic replay clearly. When WebMCP is ready, native agent activity is the primary path.
@@ -85,7 +85,7 @@ Payment refunds are the concrete proof. The reusable interaction model applies w
 
 ## Brand status
 
-"Sloth" remains the hackathon working name. The proposed running-sloth wordmark was derived from a Pinterest reference and is **rejected for this submission** because its provenance and reuse rights are not clear. Keep the current simple in-product “S” mark for the challenge. The name is already used by multiple software, AI, and finance products, so do not claim trademark exclusivity; revisit naming and formal clearance only after the hackathon.
+"Sloth" remains the hackathon working name. The proposed running-sloth wordmark was derived from a Pinterest reference and is **rejected for this submission** because its provenance and reuse rights are not clear. The shipped interface uses the simple in-product “S” mark and a capability-lifecycle diagram instead. The name is already used by multiple software, AI, and finance products, so do not claim trademark exclusivity; revisit naming and formal clearance only after the hackathon.
 
 ## Submission gate
 
