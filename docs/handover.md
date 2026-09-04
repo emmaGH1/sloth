@@ -2,7 +2,7 @@
 
 ## Status
 
-**Checkpoint 22 — Honesty pass on Checkpoint 21.** Native grant lifecycle, request-scoped aggregate cap, and judge docs now match the console. Logo kept (not reverted). Local `main` includes unpushed work on top of `76c1e0c`.
+**Checkpoint 22 shipped.** Honesty pass is on `main` (`a657f5e`, tag `checkpoint-22`) and production `https://sloth-webmcp.vercel.app`. Next human step is a native Track A walk + sub-3-minute recording. No more product work unless Track A fails.
 
 ## Product in one sentence
 
@@ -32,14 +32,33 @@
 
 - `npm test`: 22/22 passing unit tests.
 - `npm run build`: passes.
-- Browser fallback on `http://localhost:3001/`: console visible under a compact hero; request card shows `$184` / `$304`; grant TTL ~10 minutes; TX-999 stays `SCOPE_VIOLATION` with rail `05`; in-scope execute consumes to rail `04`. Native WebMCP still needs Chrome 149+ / Inspector.
+- GitHub `main` and tag `checkpoint-22` = `a657f5e`.
+- Production: https://sloth-webmcp.vercel.app (Open console, `maxTotalAmount: 304` in architecture snippet).
+- Browser fallback previously verified locally: request card `$184` / `$304`; TTL ~10 minutes; TX-999 stays `SCOPE_VIOLATION` with rail `05`; in-scope execute consumes to rail `04`.
+- Native Track A (ChatGPT / Inspector) is **not** verified from this session.
 
 ## Risks
 
 - Native 4 → 5 → 4 is still not covered by unit tests (browser registry only).
 - A 10-minute TTL can still expire a very slow native session; Fast-forward is for fallback demos, not the happy path.
-- Public Vercel URL still serves the previous deploy until this is pushed.
+
+## Devpost testing instructions (paste)
+
+**Live app:** https://sloth-webmcp.vercel.app  
+**Repo:** https://github.com/emmaGH1/sloth (MIT)
+
+The header chip is the mode. **WebMCP / Native Live** = real tools. **WebMCP / Simulation** = labelled replay, not native proof. Do not click Launch Delegated Run if you are evaluating native tools.
+
+**Track A (recommended).** Chrome 149+ with `chrome://flags/#enable-webmcp-testing`, or ChatGPT’s in-app browser. Prompt:
+
+```
+Clean up today’s payment problems. Only bother me when you actually need my authority.
+```
+
+You should see: four tools (no refund) → investigation counts unmask → authority card from the agent payload → Adjust to $72 / item and $150 aggregate → fifth tool appears → out-of-scope call returns SCOPE_VIOLATION → TX-48 and TX-72 refund → tool gone (rail 04).
+
+**Track B (no WebMCP).** Click Launch Delegated Run, Adjust $72 / $150, Confirm revised grant, probe TX-999, Execute verified refunds (single-use).
 
 ## NEXT ACTION
 
-Run `npm test` and `npm run build`, walk the fallback path once in the browser, then push and deploy (`vercel --prod`) if the judge URL should pick this up.
+Walk Track A on https://sloth-webmcp.vercel.app in Chrome/ChatGPT with Native Live. If it holds, record the nine PRD beats under three minutes (console beside Inspector; do not climax on Fast-forward or architecture). Then freeze.
